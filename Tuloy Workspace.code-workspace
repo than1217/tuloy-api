@@ -1,0 +1,15 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"chat.tools.terminal.autoApprove": {
+			"/^pip install -r requirements\\.txt$/": {
+				"approve": true,
+				"matchCommandLine": true
+			}
+		}
+	}
+}
