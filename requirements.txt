@@ -4,6 +4,6 @@ pydantic
 mysql-connector-python
 python-dotenv
 PyJWT
-passlib[bcrypt]
+bcrypt
 python-multipart
 sshtunnel

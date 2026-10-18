@@ -55,6 +55,9 @@ This project is a simple FastAPI application that provides an endpoint to match 
     SSH_PKEY=/path/to/private/key
     ```
     (Note: `SSH_PASSWORD` or `SSH_PKEY` is required if `SSH_HOST` is set.)
+    The API verifies the tunnel and database connection during startup. If the
+    tunnel cannot be established, startup fails with the SSH error instead of
+    serving requests that will fail with a database error.
 
 ## Database Setup
 

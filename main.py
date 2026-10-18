@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 import jwt
-from passlib.context import CryptContext
+import bcrypt
 from contextlib import asynccontextmanager
 try:
     from sshtunnel import SSHTunnelForwarder
@@ -33,60 +33,83 @@ ssh_tunnel = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global ssh_tunnel
-    
-    use_ssh = os.getenv("SSH_HOST") is not None
-    if use_ssh and SSHTunnelForwarder is not None:
-        ssh_host = os.getenv("SSH_HOST")
-        ssh_port = int(os.getenv("SSH_PORT", "22"))
-        ssh_user = os.getenv("SSH_USER")
-        ssh_password = os.getenv("SSH_PASSWORD")
-        ssh_pkey = os.getenv("SSH_PKEY")
-        
-        tunnel_kwargs = {
-            "ssh_address_or_host": (ssh_host, ssh_port),
-            "ssh_username": ssh_user,
-            "remote_bind_address": (DB_CONFIG["host"], DB_CONFIG["port"])
-        }
-        if ssh_pkey:
-            tunnel_kwargs["ssh_pkey"] = ssh_pkey
-        if ssh_password:
-            tunnel_kwargs["ssh_password"] = ssh_password
-            
-        try:
-            ssh_tunnel = SSHTunnelForwarder(**tunnel_kwargs)
-            ssh_tunnel.start()
-            print(f"SSH tunnel established. Local bind port: {ssh_tunnel.local_bind_port}")
-            DB_CONFIG["host"] = "127.0.0.1"
-            DB_CONFIG["port"] = ssh_tunnel.local_bind_port
-        except Exception as e:
-            print(f"Failed to start SSH tunnel: {e}")
-    elif use_ssh:
-        print("SSH_HOST is set but sshtunnel module is not installed. Please install requirements.")
 
-    # Initialize DB table for users
+    ssh_host = os.getenv("SSH_HOST")
     try:
-        conn = mysql.connector.connect(**DB_CONFIG)
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS api_users (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                username VARCHAR(255) UNIQUE NOT NULL,
-                hashed_password VARCHAR(255) NOT NULL,
-                disabled BOOLEAN DEFAULT FALSE
-            )
-        """)
-        conn.commit()
-        cursor.close()
-        conn.close()
-        print("Initialized api_users table successfully.")
-    except Error as e:
-        print(f"Error initializing database: {e}")
-    
-    yield
-    
+        try:
+            if ssh_host:
+                if SSHTunnelForwarder is None:
+                    raise RuntimeError(
+                        "SSH_HOST is set but sshtunnel is not installed. Install requirements."
+                    )
+
+                ssh_port = int(os.getenv("SSH_PORT", "22"))
+                ssh_user = os.getenv("SSH_USER")
+                ssh_password = os.getenv("SSH_PASSWORD")
+                ssh_pkey = os.getenv("SSH_PKEY")
+
+                if not ssh_user:
+                    raise RuntimeError("SSH_USER is required when SSH_HOST is set.")
+                if not ssh_password and not ssh_pkey:
+                    raise RuntimeError(
+                        "Set SSH_PASSWORD or SSH_PKEY when SSH_HOST is set."
+                    )
+
+                tunnel_kwargs = {
+                    "ssh_address_or_host": (ssh_host, ssh_port),
+                    "ssh_username": ssh_user,
+                    "remote_bind_address": (DB_CONFIG["host"], DB_CONFIG["port"])
+                }
+                if ssh_pkey:
+                    tunnel_kwargs["ssh_pkey"] = ssh_pkey
+                if ssh_password:
+                    tunnel_kwargs["ssh_password"] = ssh_password
+
+                ssh_tunnel = SSHTunnelForwarder(**tunnel_kwargs)
+                ssh_tunnel.start()
+                print(f"SSH tunnel established. Local bind port: {ssh_tunnel.local_bind_port}")
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to establish SSH tunnel to {ssh_host}: {e}"
+            ) from e
+
+        conn = None
+        cursor = None
+        try:
+            conn = mysql.connector.connect(**get_db_config())
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS api_users (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    username VARCHAR(255) UNIQUE NOT NULL,
+                    hashed_password VARCHAR(255) NOT NULL,
+                    disabled BOOLEAN DEFAULT FALSE
+                )
+            """)
+            conn.commit()
+            print("Initialized api_users table successfully.")
+        except Error as e:
+            raise RuntimeError(f"Error initializing database: {e}") from e
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
+
+        yield
+    finally:
+        if ssh_tunnel:
+            ssh_tunnel.stop()
+            ssh_tunnel = None
+            print("SSH tunnel closed.")
+
+
+def get_db_config():
+    config = DB_CONFIG.copy()
     if ssh_tunnel:
-        ssh_tunnel.stop()
-        print("SSH tunnel closed.")
+        config["host"] = "127.0.0.1"
+        config["port"] = ssh_tunnel.local_bind_port
+    return config
 
 app = FastAPI(title="Tuloy API", lifespan=lifespan)
 
@@ -95,14 +118,13 @@ SECRET_KEY = os.getenv("SECRET_KEY", "your-super-secret-key-for-jwt")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 def get_db_connection():
     """Dependency to get a database connection per request"""
     conn = None
     try:
-        conn = mysql.connector.connect(**DB_CONFIG)
+        conn = mysql.connector.connect(**get_db_config())
         yield conn
     except Error as e:
         print(f"\n[ERROR] Database connection error: {e}\n")
@@ -111,11 +133,14 @@ def get_db_connection():
         if conn and conn.is_connected():
             conn.close()
 
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    pwd_bytes = plain_password.encode("utf-8")[:72]
+    return bcrypt.checkpw(pwd_bytes, hashed_password.encode("utf-8"))
 
-def get_password_hash(password):
-    return pwd_context.hash(password)
+def get_password_hash(password: str) -> str:
+    pwd_bytes = password.encode("utf-8")[:72]
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(pwd_bytes, salt).decode("utf-8")
 
 def authenticate_user(db, username: str, password: str):
     cursor = db.cursor(dictionary=True)
