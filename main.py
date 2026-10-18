@@ -172,8 +172,15 @@ def register_user(user: UserCreate, db = Depends(get_db_connection)):
 
 class UserInput(BaseModel):
     first_name: str
+    middle_name: Optional[str] = None
     last_name: str
     date_of_birth: str  # e.g., 'YYYY-MM-DD'
+    sex: Optional[str] = None
+    member_id: Optional[str] = None
+    household_id: Optional[str] = None
+    lrn: Optional[str] = None
+    pcn: Optional[str] = None
+    geocode: Optional[str] = None
 
 def generate_md5_hash(first_name: str, last_name: str, dob: str) -> str:
     """Generate MD5 hash from the inputs to match the database match_keys format."""
@@ -188,6 +195,15 @@ def match_user(user: UserInput, current_user: dict = Depends(get_current_user), 
     
     # 1. Generate the hash (for the response)
     user_hash = generate_md5_hash(user.first_name, user.last_name, user.date_of_birth)
+    optional_filters = {
+        "middle_name": user.middle_name,
+        "sex": user.sex,
+        "member_id": user.member_id,
+        "household_id": user.household_id,
+        "lrn": user.lrn,
+        "pcn": user.pcn,
+        "geocode": user.geocode,
+    }
     
     try:
         # 2. Query the source table
@@ -199,7 +215,13 @@ def match_user(user: UserInput, current_user: dict = Depends(get_current_user), 
                 %s
             ))
         """
-        cursor.execute(select_query, (user.first_name, user.last_name, user.date_of_birth))
+        query_params = [user.first_name, user.last_name, user.date_of_birth]
+        for column, value in optional_filters.items():
+            if value is not None:
+                select_query += f" AND {column} = %s"
+                query_params.append(value)
+
+        cursor.execute(select_query, tuple(query_params))
         results = cursor.fetchall()
         
         row_count = len(results)

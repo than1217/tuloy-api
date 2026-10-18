@@ -1,6 +1,6 @@
 # User Match API
 
-This project is a simple FastAPI application that provides an endpoint to match user data against a database. It takes a user's first name, last name, and date of birth, generates an MD5 hash from this information, and then queries a database to find a matching record.
+This project is a simple FastAPI application that provides an endpoint to match user data against a database. It takes a user's first name, last name, and date of birth, generates an MD5 hash from this information, and then queries a database to find a matching record. Optional identity fields can further narrow the search.
 
 ## Features
 
@@ -93,10 +93,19 @@ This endpoint receives user details, generates a hash, and attempts to find a ma
 ```json
 {
   "first_name": "John",
+  "middle_name": "Quincy",
   "last_name": "Doe",
-  "date_of_birth": "1990-01-15"
+  "date_of_birth": "1990-01-15",
+  "sex": "Male",
+  "member_id": "123456",
+  "household_id": "789012",
+  "lrn": "100000000001",
+  "pcn": "1234567890123456",
+  "geocode": "123456789"
 }
 ```
+
+`first_name`, `last_name`, and `date_of_birth` are required. `middle_name`, `sex`, `member_id`, `household_id`, `lrn`, `pcn`, and `geocode` are optional; when provided, each is used as an exact-match filter against the corresponding column in `vw_verify_member_bene`.
 
 **Responses:**
 
