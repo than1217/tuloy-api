@@ -12,19 +12,57 @@ from typing import Optional
 import jwt
 from passlib.context import CryptContext
 from contextlib import asynccontextmanager
+try:
+    from sshtunnel import SSHTunnelForwarder
+except ImportError:
+    SSHTunnelForwarder = None
 
 load_dotenv()
 
 # Database connection configuration
 DB_CONFIG = {
     'host': os.getenv("DB_HOST"),
+    'port': int(os.getenv("DB_PORT", 3306)),
     'database': os.getenv("DB_DATABASE"),
     'user': os.getenv("DB_USER"),
     'password': os.getenv("DB_PASSWORD")
 }
 
+ssh_tunnel = None
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global ssh_tunnel
+    
+    use_ssh = os.getenv("SSH_HOST") is not None
+    if use_ssh and SSHTunnelForwarder is not None:
+        ssh_host = os.getenv("SSH_HOST")
+        ssh_port = int(os.getenv("SSH_PORT", "22"))
+        ssh_user = os.getenv("SSH_USER")
+        ssh_password = os.getenv("SSH_PASSWORD")
+        ssh_pkey = os.getenv("SSH_PKEY")
+        
+        tunnel_kwargs = {
+            "ssh_address_or_host": (ssh_host, ssh_port),
+            "ssh_username": ssh_user,
+            "remote_bind_address": (DB_CONFIG["host"], DB_CONFIG["port"])
+        }
+        if ssh_pkey:
+            tunnel_kwargs["ssh_pkey"] = ssh_pkey
+        if ssh_password:
+            tunnel_kwargs["ssh_password"] = ssh_password
+            
+        try:
+            ssh_tunnel = SSHTunnelForwarder(**tunnel_kwargs)
+            ssh_tunnel.start()
+            print(f"SSH tunnel established. Local bind port: {ssh_tunnel.local_bind_port}")
+            DB_CONFIG["host"] = "127.0.0.1"
+            DB_CONFIG["port"] = ssh_tunnel.local_bind_port
+        except Exception as e:
+            print(f"Failed to start SSH tunnel: {e}")
+    elif use_ssh:
+        print("SSH_HOST is set but sshtunnel module is not installed. Please install requirements.")
+
     # Initialize DB table for users
     try:
         conn = mysql.connector.connect(**DB_CONFIG)
@@ -43,7 +81,12 @@ async def lifespan(app: FastAPI):
         print("Initialized api_users table successfully.")
     except Error as e:
         print(f"Error initializing database: {e}")
+    
     yield
+    
+    if ssh_tunnel:
+        ssh_tunnel.stop()
+        print("SSH tunnel closed.")
 
 app = FastAPI(title="Tuloy API", lifespan=lifespan)
 

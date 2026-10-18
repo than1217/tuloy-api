@@ -39,10 +39,22 @@ This project is a simple FastAPI application that provides an endpoint to match 
 
     ```env
     DB_HOST=localhost
+    DB_PORT=3306
     DB_DATABASE=your_database_name
     DB_USER=your_username
     DB_PASSWORD=your_password
     ```
+
+    **Optional: SSH Tunneling**
+    If your database is behind a jump server, you can configure an SSH tunnel by providing the following variables:
+    ```env
+    SSH_HOST=your_ssh_host
+    SSH_PORT=22
+    SSH_USER=your_ssh_username
+    SSH_PASSWORD=your_ssh_password
+    SSH_PKEY=/path/to/private/key
+    ```
+    (Note: `SSH_PASSWORD` or `SSH_PKEY` is required if `SSH_HOST` is set.)
 
 ## Database Setup
 
