@@ -272,21 +272,30 @@ def match_user(user: UserInput, current_user: dict = Depends(get_current_user), 
         "pcn": user.pcn,
         "geocode": user.geocode,
     }
+    optional_filter_columns = {
+        "middle_name": "middle_name",
+        "sex": "sex_id",
+        "member_id": "member_id",
+        "household_id": "listahanan_id",
+        "lrn": "lrn",
+        "pcn": "philsys",
+        "geocode": "bgy_psgc_code",
+    }
     
     try:
         # 2. Query the source table
         select_query = r"""
             SELECT * FROM vw_verify_member_bene 
-            WHERE match_keys = MD5(CONCAT_WS('/', 
+            WHERE match_keys = UNHEX(MD5(CONCAT_WS('/', 
                 UPPER(TRIM(REGEXP_REPLACE(%s, '\\s+', ' '))),
                 UPPER(TRIM(REGEXP_REPLACE(%s, '\\s+', ' '))), 
                 %s
-            ))
+            )))
         """
         query_params = [user.first_name, user.last_name, user.date_of_birth]
-        for column, value in optional_filters.items():
+        for field, value in optional_filters.items():
             if value is not None:
-                select_query += f" AND {column} = %s"
+                select_query += f" AND {optional_filter_columns[field]} = %s"
                 query_params.append(value)
 
         cursor.execute(select_query, tuple(query_params))

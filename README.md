@@ -162,7 +162,7 @@ Content-Type: application/json
 ```
 
 - **Required Fields:** `first_name`, `last_name`, `date_of_birth`
-- **Optional Fields:** `middle_name`, `sex`, `member_id`, `household_id`, `lrn`, `pcn`, `geocode` (used as exact-match filters against the corresponding table columns).
+- **Optional Fields:** `middle_name`, `sex`, `member_id`, `household_id`, `lrn`, `pcn`, `geocode` (used as exact-match filters; `sex` maps to `sex_id`, `household_id` to `listahanan_id`, `pcn` to `philsys`, and `geocode` to `bgy_psgc_code` in `vw_verify_member_bene`).
 
 **Responses:**
 

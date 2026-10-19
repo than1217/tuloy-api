@@ -11,6 +11,10 @@
 			"/^pip install -r requirements\\.txt$/": {
 				"approve": true,
 				"matchCommandLine": true
+			},
+			"/^python main\\.py$/": {
+				"approve": true,
+				"matchCommandLine": true
 			}
 		}
 	}
