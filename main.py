@@ -261,8 +261,6 @@ def generate_md5_hash(first_name: str, last_name: str, dob: str) -> str:
 def match_user(user: UserInput, current_user: dict = Depends(get_current_user), db = Depends(get_db_connection)):
     cursor = db.cursor(dictionary=True)
     
-    # 1. Generate the hash (for the response)
-    user_hash = generate_md5_hash(user.first_name, user.last_name, user.date_of_birth)
     optional_filters = {
         "middle_name": user.middle_name,
         "sex": user.sex,
@@ -305,15 +303,14 @@ def match_user(user: UserInput, current_user: dict = Depends(get_current_user), 
         
         # 3. Check the conditions
         if row_count == 0:
-            return {"status": "Not Found", "md5_hash": user_hash, "member_id": None}
+            return {"status": "Not Found", "member_id": None}
             
         elif row_count >= 2:
-            return {"status": "Multiple Match Found", "md5_hash": user_hash, "member_id": None}
+            return {"status": "Multiple Match Found", "member_id": None}
             
         elif row_count == 1:
             return {
                 "status": "Matched",
-                "md5_hash": user_hash,
                 "member_id": results[0].get("member_id"),
             }
             

@@ -170,7 +170,6 @@ Content-Type: application/json
   ```json
   {
     "status": "Not Found",
-    "md5_hash": "b10a8db164e0754105b7a99be72e3fe5",
     "member_id": null
   }
   ```
@@ -178,7 +177,6 @@ Content-Type: application/json
   ```json
   {
     "status": "Multiple Match Found",
-    "md5_hash": "b10a8db164e0754105b7a99be72e3fe5",
     "member_id": null
   }
   ```
@@ -186,7 +184,6 @@ Content-Type: application/json
   ```json
   {
     "status": "Matched",
-    "md5_hash": "b10a8db164e0754105b7a99be72e3fe5",
     "member_id": "123456"
   }
   ```
