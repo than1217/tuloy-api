@@ -170,23 +170,27 @@ Content-Type: application/json
   ```json
   {
     "status": "Not Found",
-    "md5_hash": "b10a8db164e0754105b7a99be72e3fe5"
+    "md5_hash": "b10a8db164e0754105b7a99be72e3fe5",
+    "member_id": null
   }
   ```
 - **`200 OK` - Multiple Matches:**
   ```json
   {
     "status": "Multiple Match Found",
-    "md5_hash": "b10a8db164e0754105b7a99be72e3fe5"
+    "md5_hash": "b10a8db164e0754105b7a99be72e3fe5",
+    "member_id": null
   }
   ```
 - **`200 OK` - Matched:**
   ```json
   {
     "status": "Matched",
-    "md5_hash": "b10a8db164e0754105b7a99be72e3fe5"
+    "md5_hash": "b10a8db164e0754105b7a99be72e3fe5",
+    "member_id": "123456"
   }
   ```
+  `member_id` is taken from the uniquely matched database record. It is `null` when there is no match or multiple records match.
 - **`401 Unauthorized`:** Missing, invalid, or expired Bearer token.
 - **`500 Internal Server Error`:** Database connection or query execution failure.
 

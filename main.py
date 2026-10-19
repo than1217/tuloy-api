@@ -305,13 +305,17 @@ def match_user(user: UserInput, current_user: dict = Depends(get_current_user), 
         
         # 3. Check the conditions
         if row_count == 0:
-            return {"status": "Not Found", "md5_hash": user_hash}
+            return {"status": "Not Found", "md5_hash": user_hash, "member_id": None}
             
         elif row_count >= 2:
-            return {"status": "Multiple Match Found", "md5_hash": user_hash}
+            return {"status": "Multiple Match Found", "md5_hash": user_hash, "member_id": None}
             
         elif row_count == 1:
-            return {"status": "Matched", "md5_hash": user_hash}
+            return {
+                "status": "Matched",
+                "md5_hash": user_hash,
+                "member_id": results[0].get("member_id"),
+            }
             
     except Error as e:
         print(f"\n[ERROR] Database error during verification: {e}\n")
