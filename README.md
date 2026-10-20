@@ -193,6 +193,39 @@ Content-Type: application/json
 
 ---
 
+### 4. `GET /GetEligibleBene`
+*(Requires ****** authentication)*
+
+Returns one page of records from `vw_verify_member_bene` to avoid loading the entire dataset into memory or sending millions of rows in one response.
+
+**Query parameters:**
+- `limit` (optional, default `100`, maximum `1000`): Number of records to return.
+- `offset` (optional, default `0`): Number of records to skip before returning the page.
+
+**Headers:**
+```http
+Authorization: ******
+```
+
+**Response:**
+```json
+{
+  "items": [],
+  "limit": 100,
+  "offset": 0,
+  "has_more": true,
+  "next_offset": 100
+}
+```
+Use `next_offset` as the `offset` for the next request while `has_more` is `true`. The endpoint does not calculate a total count, avoiding an additional potentially expensive query.
+
+**Responses:**
+- **`200 OK`:** One page of eligible beneficiary records and pagination metadata.
+- **`401 Unauthorized`:** Missing, invalid, or expired ******
+- **`500 Internal Server Error`:** Database connection or query execution failure.
+
+---
+
 ## Testing with cURL
 
 1. **Sign up:**
