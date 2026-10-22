@@ -7,6 +7,7 @@ This project is a FastAPI application that provides secure authentication and an
 -   **User Matching**: Matches user data based on a generated MD5 hash and optional identity filters.
 -   **Match Status Handling**: Returns standard statuses: "Not Found", "Multiple Match Found", and "Matched".
 -   **Authentication & Security**: JWT-based OAuth2 authentication (signup, token generation, and route protection using bcrypt for password hashing).
+-   **Response Caching**: Caching on `GET /GetEligibleBene` via `fastapi-cache2` with Redis support and automatic in-memory fallback.
 -   **SSH Tunnel Support**: Connects to remote databases located behind an SSH bastion/jump server.
 -   **Environment Configuration**: Configured using environment variables (`.env`).
 
@@ -51,6 +52,10 @@ This project is a FastAPI application that provides secure authentication and an
     # Authentication (Optional overrides)
     SECRET_KEY=your-super-secret-key-for-jwt
     ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+    # Optional: Caching (defaults to redis://localhost:6379 with InMemory fallback, 1200s TTL)
+    REDIS_URL=redis://localhost:6379
+    CACHE_EXPIRE_SECONDS=1200
 
     # Optional: SSH Tunneling (if database is behind a jump host)
     SSH_HOST=your_ssh_host

@@ -15,6 +15,10 @@
 			"/^python main\\.py$/": {
 				"approve": true,
 				"matchCommandLine": true
+			},
+			"/^pip install fastapi-cache2\\[redis\\] redis$/": {
+				"approve": true,
+				"matchCommandLine": true
 			}
 		}
 	}

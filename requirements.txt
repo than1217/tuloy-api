@@ -7,3 +7,6 @@ PyJWT
 bcrypt
 python-multipart
 sshtunnel
+fastapi-cache2
+redis
+jinja2

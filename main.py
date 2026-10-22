@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, Query, status
+from fastapi import FastAPI, HTTPException, Depends, Query, Request, Response, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
@@ -13,12 +13,40 @@ from typing import Optional
 import jwt
 import bcrypt
 from contextlib import asynccontextmanager
+
+from fastapi_cache import FastAPICache
+from fastapi_cache.backends.inmemory import InMemoryBackend
+from fastapi_cache.backends.redis import RedisBackend
+from fastapi_cache.decorator import cache
+from redis import asyncio as aioredis
 try:
     from sshtunnel import SSHTunnelForwarder
 except ImportError:
     SSHTunnelForwarder = None
 
 load_dotenv()
+
+CACHE_EXPIRE_SECONDS = int(os.getenv("CACHE_EXPIRE_SECONDS", "1200"))
+
+
+def cache_key_builder(
+    func,
+    namespace: str = "",
+    *,
+    request: Optional[Request] = None,
+    response: Optional[Response] = None,
+    args: tuple = (),
+    kwargs: Optional[dict] = None,
+) -> str:
+    """Build deterministic cache keys excluding per-request DB/auth dependency objects."""
+    filtered_kwargs = {
+        k: v
+        for k, v in (kwargs or {}).items()
+        if k not in ("db", "current_user")
+    }
+    raw_key = f"{func.__module__}:{func.__name__}:{args}:{sorted(filtered_kwargs.items())}"
+    key_hash = hashlib.md5(raw_key.encode("utf-8")).hexdigest()
+    return f"{namespace}:{key_hash}"
 
 # Database connection configuration
 DB_CONFIG = {
@@ -30,10 +58,37 @@ DB_CONFIG = {
 }
 
 ssh_tunnel = None
+redis_client = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global ssh_tunnel
+    global ssh_tunnel, redis_client
+
+    # Initialize Redis for caching (with automatic InMemoryBackend fallback)
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+    try:
+        redis_client = aioredis.from_url(redis_url)
+        await redis_client.ping()
+        FastAPICache.init(
+            RedisBackend(redis_client),
+            prefix="tuloy-api-cache",
+            expire=CACHE_EXPIRE_SECONDS,
+            key_builder=cache_key_builder,
+        )
+        print(f"Redis cache initialized at {redis_url} (TTL: {CACHE_EXPIRE_SECONDS}s)")
+    except Exception as e:
+        if redis_client is not None:
+            await redis_client.aclose()
+            redis_client = None
+        FastAPICache.init(
+            InMemoryBackend(),
+            prefix="tuloy-api-cache",
+            expire=CACHE_EXPIRE_SECONDS,
+            key_builder=cache_key_builder,
+        )
+        print(
+            f"Redis unavailable ({e}). Falling back to InMemoryBackend (TTL: {CACHE_EXPIRE_SECONDS}s)"
+        )
 
     ssh_host = os.getenv("SSH_HOST")
     try:
@@ -99,6 +154,10 @@ async def lifespan(app: FastAPI):
 
         yield
     finally:
+        if redis_client is not None:
+            await redis_client.aclose()
+            redis_client = None
+            print("Redis connection closed.")
         if ssh_tunnel:
             ssh_tunnel.stop()
             ssh_tunnel = None
@@ -322,6 +381,7 @@ def match_user(user: UserInput, current_user: dict = Depends(get_current_user), 
         cursor.close()
 
 @app.get("/GetEligibleBene")
+@cache(expire=CACHE_EXPIRE_SECONDS, namespace="eligible-bene")
 def get_eligible_bene(
     current_user: dict = Depends(get_current_user),
     db=Depends(get_db_connection),
