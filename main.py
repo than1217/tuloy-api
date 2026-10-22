@@ -24,7 +24,7 @@ try:
 except ImportError:
     SSHTunnelForwarder = None
 
-load_dotenv()
+load_dotenv(override=True)
 
 CACHE_EXPIRE_SECONDS = int(os.getenv("CACHE_EXPIRE_SECONDS", "1200"))
 
@@ -63,6 +63,14 @@ redis_client = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global ssh_tunnel, redis_client
+    load_dotenv(override=True)
+    DB_CONFIG.update({
+        "host": os.getenv("DB_HOST"),
+        "port": int(os.getenv("DB_PORT", 3306)),
+        "database": os.getenv("DB_DATABASE"),
+        "user": os.getenv("DB_USER"),
+        "password": os.getenv("DB_PASSWORD"),
+    })
 
     # Initialize Redis for caching (with automatic InMemoryBackend fallback)
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
@@ -167,6 +175,8 @@ async def lifespan(app: FastAPI):
 def get_db_config():
     config = DB_CONFIG.copy()
     if ssh_tunnel:
+        if not ssh_tunnel.is_active:
+            ssh_tunnel.start()
         config["host"] = "127.0.0.1"
         config["port"] = ssh_tunnel.local_bind_port
     return config
@@ -363,15 +373,15 @@ def match_user(user: UserInput, current_user: dict = Depends(get_current_user), 
         
         # 3. Check the conditions
         if row_count == 0:
-            return {"status": "Not Found", "member_id": None}
+            return {"status": "Not Found", "4ps_member_id": None}
             
         elif row_count >= 2:
-            return {"status": "Multiple Match Found", "member_id": None}
+            return {"status": "Multiple Match Found", "4ps_member_id": None}
             
         elif row_count == 1:
             return {
                 "status": "Matched",
-                "member_id": results[0].get("member_id"),
+                "4ps_member_id": results[0].get("4ps_member_id"),
             }
             
     except Error as e:

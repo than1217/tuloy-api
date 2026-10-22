@@ -175,24 +175,24 @@ Content-Type: application/json
   ```json
   {
     "status": "Not Found",
-    "member_id": null
+    "4ps_member_id": null
   }
   ```
 - **`200 OK` - Multiple Matches:**
   ```json
   {
     "status": "Multiple Match Found",
-    "member_id": null
+    "4ps_member_id": null
   }
   ```
 - **`200 OK` - Matched:**
   ```json
   {
     "status": "Matched",
-    "member_id": "123456"
+    "4ps_member_id": "123456"
   }
   ```
-  `member_id` is taken from the uniquely matched database record. It is `null` when there is no match or multiple records match.
+  `4ps_member_id` is taken from the uniquely matched database record. It is `null` when there is no match or multiple records match.
 - **`401 Unauthorized`:** Missing, invalid, or expired Bearer token.
 - **`500 Internal Server Error`:** Database connection or query execution failure.
 
