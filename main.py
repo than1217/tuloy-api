@@ -394,7 +394,7 @@ def get_eligible_bene(
             "SELECT `first_name`,`middle_name`,`last_name`," \
             "`date_of_birth`,`sex_id`,`member_id`,`listahanan_id`," \
             "`lrn`,`philsys`,`grade_level`,`m_maiden_name`,`account_no`," \
-            "`bgy_psgc_code`,`barangay_name`,`client_status`,`roster_status` " \
+            "`bgy_psgc_code`,`barangay_name`,`client_status`,`roster_status`, `4ps_member_id` " \
             "FROM vw_verify_member_bene LIMIT %s OFFSET %s",
             (limit + 1, offset),
         )
