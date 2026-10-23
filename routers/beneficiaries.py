@@ -87,12 +87,13 @@ def get_eligible_bene(
     cursor = db.cursor(dictionary=True)
     try:
         cursor.execute(
-            "SELECT `first_name`,`middle_name`,`last_name`," \
-            "`date_of_birth`,`sex_id`,`member_id`,`listahanan_id`," \
-            "`lrn`,`philsys`,`grade_level`,`m_maiden_name`,`account_no`," \
-            "`bgy_psgc_code`,`barangay_name`,`client_status`,`roster_status`, `tuloy_id` " \
-            "FROM vw_verify_member_bene WHERE `tuloy_id` IN " \
-            "(SELECT `tuloy_id` FROM enroll_matched_CHED_tbl) " \
+            """
+            SELECT `first_name`,`middle_name`,`last_name`,
+            `date_of_birth`,`sex_id`,`member_id`,`listahanan_id`,
+            `lrn`,`philsys`,`grade_level`,`m_maiden_name`,`account_no`,
+            `region_name`,`barangay_name`,`client_status`,`roster_status`, `tuloy_id` 
+            FROM vw_verify_member_bene WHERE `tuloy_id` NOT IN 
+            (SELECT `tuloy_id` FROM enroll_matched_CHED_tbl WHERE `tuloy_id` IS NOT NULL) """ \
             "LIMIT %s OFFSET %s",
             (limit + 1, offset),
         )
