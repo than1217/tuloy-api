@@ -244,6 +244,60 @@ Use `next_offset` as the `offset` for the next request while `has_more` is `true
 
 ---
 
+### 5. `POST /PostEnrolleeMatchedCHED`
+*(Requires ****** authentication)*
+
+Receives CHED match data payload and persists it to the `matching_transaction_CHED_tbl` and `enroll_matched_CHED_tbl` tables.
+
+**Headers:**
+```http
+Authorization: ******
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "status": true,
+  "message": "FOUND",
+  "enrollment_id": 1,
+  "data": {
+    "id": "4ps-1234",
+    "member_id": 1234,
+    "student_id": 12345,
+    "mothers_maiden": {
+      "first_name": "JUANA",
+      "middle_name": "",
+      "last_name": "MARIA"
+    },
+    "degree": {
+      "program_name": "BS IT",
+      "date_enrolled": "2026-08-01",
+      "program_duration": 4,
+      "academic_year": "2026-2027",
+      "year_level": 1,
+      "semester": 1
+    },
+    "enrollment_status": "ENROLLED",
+    "date_encoded": "2026-10-23",
+    "date_updated": null
+  },
+  "error_code": null
+}
+```
+
+**Responses:**
+- **`200 OK`:** 
+  ```json
+  {
+    "message": "CHED response recorded successfully."
+  }
+  ```
+- **`401 Unauthorized`:** Missing, invalid, or expired ******
+- **`500 Internal Server Error`:** Database connection or query execution failure.
+
+---
+
 ## Testing with cURL
 
 1. **Sign up:**

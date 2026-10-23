@@ -5,7 +5,7 @@ from fastapi_cache.decorator import cache
 import os
 
 from database import get_db_connection
-from schemas import UserInput
+from schemas import UserInput, ChedResponsePayload, MothersMaiden, Degree
 from security import get_current_user
 
 router = APIRouter(tags=["Beneficiaries"])
@@ -110,3 +110,82 @@ def get_eligible_bene(
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     finally:
         cursor.close()
+
+@router.post("/PostEnrolleeMatchedCHED")
+def record_ched_response(
+    payload: ChedResponsePayload, 
+    current_user: dict = Depends(get_current_user), 
+    db = Depends(get_db_connection)
+):
+    cursor = db.cursor()
+    try:
+        # 1. Insert into transaction status table
+        insert_txn_query = """
+            INSERT INTO matching_transaction_CHED_tbl 
+            (`4ps_member_id`, `status`) 
+            VALUES (%s, %s)
+        """
+        
+        member_id_str = ""
+        if payload.data:
+            if payload.data.id:
+                member_id_str = str(payload.data.id)
+            elif payload.data.member_id:
+                member_id_str = str(payload.data.member_id)
+                
+        db_status = payload.message or ("FOUND" if payload.status else "NOT FOUND")
+        
+        cursor.execute(insert_txn_query, (
+            member_id_str, 
+            db_status
+        ))
+        txn_id = cursor.lastrowid
+        
+        # 2. Insert into data table if status is matched (or status == True and message == "FOUND")
+        if payload.status and payload.message == "FOUND" and payload.data:
+            insert_data_query = """
+                INSERT INTO enroll_matched_CHED_tbl (
+                    match_id, enrollment_id, pppp_member_id, member_id, student_id,
+                    mothers_maiden_first_name, mothers_maiden_middle_name, mothers_maiden_last_name,
+                    degree_program_name, degree_date_enrolled, degree_program_duration,
+                    degree_academic_year, degree_year_level, degree_semester,
+                    enrollment_status, date_encoded, date_updated
+                ) VALUES (
+                    %s, %s, %s, %s, %s,
+                    %s, %s, %s,
+                    %s, %s, %s,
+                    %s, %s, %s,
+                    %s, %s, %s
+                )
+            """
+            
+            data = payload.data
+            mmn = data.mothers_maiden or MothersMaiden()
+            deg = data.degree or Degree()
+            
+            # Use 0 for enrollment_id if not present since it's NOT NULL
+            # or pass it from a query string if desired
+            enrollment_id = payload.enrollment_id if hasattr(payload, 'enrollment_id') else 0
+
+            # Convert blank strings to None for date fields so MySQL handles them properly
+            date_enrolled_val = deg.date_enrolled if deg.date_enrolled and deg.date_enrolled.strip() else None
+            date_encoded_val = data.date_encoded if data.date_encoded and data.date_encoded.strip() else None
+            date_updated_val = data.date_updated if data.date_updated and data.date_updated.strip() else None
+            
+            cursor.execute(insert_data_query, (
+                txn_id, enrollment_id, data.id, data.member_id or 0, data.student_id,
+                mmn.first_name, mmn.middle_name, mmn.last_name,
+                deg.program_name, date_enrolled_val, deg.program_duration,
+                deg.academic_year, deg.year_level, deg.semester,
+                data.enrollment_status, date_encoded_val, date_updated_val
+            ))
+            
+        db.commit()
+        return {"message": "CHED response recorded successfully."}
+    except Error as e:
+        db.rollback()
+        print(f"\\n[ERROR] Database error: {e}\\n")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        cursor.close()
+

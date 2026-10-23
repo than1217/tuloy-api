@@ -115,8 +115,51 @@ async def lifespan(app: FastAPI):
                     disabled BOOLEAN DEFAULT FALSE
                 )
             """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS `matching_transaction_CHED_tbl` ( 
+                  `id` INT UNSIGNED AUTO_INCREMENT NOT NULL,
+                  `4ps_member_id` VARCHAR(100) NOT NULL COMMENT '4Ps member_id from TULOY' ,
+                  `status` VARCHAR(50) NOT NULL COMMENT 'e.g., FOUND, NOT FOUND, ERROR' ,
+                  `date_time_matched` DATETIME NULL DEFAULT CURRENT_TIMESTAMP ,
+                  `created_at` DATETIME NULL DEFAULT CURRENT_TIMESTAMP ,
+                   PRIMARY KEY (`id`),
+                   INDEX `idx_4ps_member_id` (`4ps_member_id`),
+                   INDEX `idx_status` (`status`)
+                ) ENGINE = InnoDB;
+            """)
+            cursor.execute("SET FOREIGN_KEY_CHECKS=0;")
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS `enroll_matched_CHED_tbl` ( 
+                  `id` INT UNSIGNED AUTO_INCREMENT NOT NULL,
+                  `match_id` INT UNSIGNED NULL,
+                  `enrollment_id` INT UNSIGNED NOT NULL,
+                  `pppp_member_id` VARCHAR(50) NULL COMMENT 'Unique id across agency pre-generated from TULOY' ,
+                  `member_id` INT UNSIGNED NOT NULL COMMENT 'Entry_id' ,
+                  `student_id` VARCHAR(50) NULL COMMENT 'CHED/Agency student id' ,
+                  `mothers_maiden_first_name` VARCHAR(100) NULL,
+                  `mothers_maiden_middle_name` VARCHAR(100) NULL,
+                  `mothers_maiden_last_name` VARCHAR(100) NULL,
+                  `degree_program_name` VARCHAR(150) NULL,
+                  `degree_date_enrolled` DATE NULL,
+                  `degree_program_duration` INT NULL COMMENT 'E.g. IT - 4, Accounting - 5' ,
+                  `degree_academic_year` VARCHAR(20) NULL,
+                  `degree_year_level` INT NULL,
+                  `degree_semester` INT NULL,
+                  `enrollment_status` VARCHAR(50) NULL,
+                  `date_encoded` DATETIME NULL COMMENT 'When the record encoded to their system' ,
+                  `date_updated` DATETIME NULL COMMENT 'When the record updated to their system' ,
+                  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ,
+                  `updated_at` TIMESTAMP NULL DEFAULT NULL  ON UPDATE CURRENT_TIMESTAMP ,
+                   PRIMARY KEY (`id`),
+                   INDEX `fk_matched_enrollment` (`enrollment_id`),
+                   INDEX `fk_matched_transaction` (`match_id`),
+                   CONSTRAINT `fk_matched_enrollment_ched` FOREIGN KEY (`enrollment_id`) REFERENCES `education_enrollment` (`enrollment_id`) ON DELETE CASCADE ON UPDATE NO ACTION,
+                   CONSTRAINT `fk_matched_transaction_ched` FOREIGN KEY (`match_id`) REFERENCES `matching_transaction_CHED_tbl` (`id`) ON DELETE SET NULL ON UPDATE NO ACTION
+                ) ENGINE = InnoDB;
+            """)
+            cursor.execute("SET FOREIGN_KEY_CHECKS=1;")
             conn.commit()
-            print("Initialized api_users table successfully.")
+            print("Initialized api_users, matching_transaction_CHED_tbl, and enroll_matched_CHED_tbl tables successfully.")
         except Error as e:
             raise RuntimeError(f"Error initializing database: {e}") from e
         finally:
