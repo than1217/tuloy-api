@@ -84,7 +84,7 @@ The codebase is organized modularly:
 Before running the application, ensure your database has:
 
 1.  A source view or table named `vw_verify_member_bene` that the API can query against.
-2.  An `api_users` table for authentication (created automatically during application startup if the database user has `CREATE TABLE` permissions):
+2.  An `api_users` table for authentication, along with `matching_transaction_CHED_tbl` and `enroll_matched_CHED_tbl` for tracking CHED responses (all created automatically during application startup if the database user has `CREATE TABLE` permissions):
 
     ```sql
     CREATE TABLE IF NOT EXISTS api_users (
@@ -93,6 +93,7 @@ Before running the application, ensure your database has:
         hashed_password VARCHAR(255) NOT NULL,
         disabled BOOLEAN DEFAULT FALSE
     );
+    -- (The schema for the matching and enrollment tables are also initialized automatically on startup)
     ```
 
 ## Usage
@@ -325,3 +326,20 @@ Content-Type: application/json
        "date_of_birth": "1990-01-15"
      }'
    ```
+
+---
+
+## Bulk Data Import (CHED Matches)
+
+The project includes multi-threaded Python scripts to process a bulk CSV of CHED matching results and automatically POST them into the API.
+
+1. Ensure the API is running locally (uvicorn main:app).
+2. In a separate terminal, run the test script (samples 10 rows) or the full import script:
+   `ash
+   # Test with 10 rows
+   .\venv\Scripts\python.exe others\test_import_ched_csv.py
+   
+   # Run the full import script (reads chunks of 10,000 rows, 5 parallel workers)
+   .\venv\Scripts\python.exe others\import_ched_csv.py
+   `
+   *(Note: The scripts will automatically sign up / log in as dmin to fetch a JWT token for the API requests, and will dynamically resolve the CHED-Matching.csv location).*
