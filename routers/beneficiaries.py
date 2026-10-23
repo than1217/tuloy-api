@@ -149,7 +149,7 @@ def record_ched_response(
             insert_data_query = """
                 INSERT INTO enroll_matched_CHED_tbl (
                     match_id, enrollment_id, `tuloy_id`, member_id, student_id,
-                    mothers_maiden_first_name, mothers_maiden_middle_name, mothers_maiden_last_name,
+                    mm_first_name, mm_middle_name, mm_last_name,
                     degree_program_name, degree_date_enrolled, degree_program_duration,
                     degree_academic_year, degree_year_level, degree_semester,
                     enrollment_status, date_encoded, date_updated
