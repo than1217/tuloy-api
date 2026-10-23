@@ -107,14 +107,14 @@ async def lifespan(app: FastAPI):
         try:
             conn = mysql.connector.connect(**get_db_config())
             cursor = conn.cursor()
-            cursor.execute("\""
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS api_users (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     username VARCHAR(255) UNIQUE NOT NULL,
                     hashed_password VARCHAR(255) NOT NULL,
                     disabled BOOLEAN DEFAULT FALSE
                 )
-            "\"")
+            """)
             conn.commit()
             print("Initialized api_users table successfully.")
         except Error as e:
