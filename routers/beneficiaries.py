@@ -58,15 +58,16 @@ def match_user(user: UserInput, current_user: dict = Depends(get_current_user), 
         
         # 3. Check the conditions
         if row_count == 0:
-            return {"status": "Not Found", "4ps_member_id": None}
+            return {"status": "Not Found", "tuloy_id": None, "member_id": None}
             
         elif row_count >= 2:
-            return {"status": "Multiple Match Found", "4ps_member_id": None}
+            return {"status": "Multiple Match Found", "tuloy_id": None, "member_id": None}
             
         elif row_count == 1:
             return {
                 "status": "Matched",
-                "4ps_member_id": results[0].get("4ps_member_id"),
+                "tuloy_id": results[0].get("tuloy_id"),
+                "member_id": results[0].get("member_id"),
             }
             
     except Error as e:
@@ -89,9 +90,9 @@ def get_eligible_bene(
             "SELECT `first_name`,`middle_name`,`last_name`," \
             "`date_of_birth`,`sex_id`,`member_id`,`listahanan_id`," \
             "`lrn`,`philsys`,`grade_level`,`m_maiden_name`,`account_no`," \
-            "`bgy_psgc_code`,`barangay_name`,`client_status`,`roster_status`, `4ps_member_id` " \
-            "FROM vw_verify_member_bene WHERE `4ps_member_id` IN " \
-            "(SELECT `4ps_member_id` FROM enroll_matched_CHED_tbl) " \
+            "`bgy_psgc_code`,`barangay_name`,`client_status`,`roster_status`, `tuloy_id` " \
+            "FROM vw_verify_member_bene WHERE `tuloy_id` IN " \
+            "(SELECT `tuloy_id` FROM enroll_matched_CHED_tbl) " \
             "LIMIT %s OFFSET %s",
             (limit + 1, offset),
         )
@@ -124,7 +125,7 @@ def record_ched_response(
         # 1. Insert into transaction status table
         insert_txn_query = """
             INSERT INTO matching_transaction_CHED_tbl 
-            (`4ps_member_id`, `status`) 
+            (`tuloy_id`, `status`) 
             VALUES (%s, %s)
         """
         
@@ -147,7 +148,7 @@ def record_ched_response(
         if payload.status and payload.message == "FOUND" and payload.data:
             insert_data_query = """
                 INSERT INTO enroll_matched_CHED_tbl (
-                    match_id, enrollment_id, `4ps_member_id`, member_id, student_id,
+                    match_id, enrollment_id, `tuloy_id`, member_id, student_id,
                     mothers_maiden_first_name, mothers_maiden_middle_name, mothers_maiden_last_name,
                     degree_program_name, degree_date_enrolled, degree_program_duration,
                     degree_academic_year, degree_year_level, degree_semester,

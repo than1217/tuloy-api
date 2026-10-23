@@ -118,12 +118,12 @@ async def lifespan(app: FastAPI):
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS `matching_transaction_CHED_tbl` ( 
                   `id` INT UNSIGNED AUTO_INCREMENT NOT NULL,
-                  `4ps_member_id` VARCHAR(100) NOT NULL COMMENT '4Ps member_id from TULOY' ,
+                  `tuloy_id` VARCHAR(100) NOT NULL COMMENT '4Ps member_id from TULOY' ,
                   `status` VARCHAR(50) NOT NULL COMMENT 'e.g., FOUND, NOT FOUND, ERROR' ,
                   `date_time_matched` DATETIME NULL DEFAULT CURRENT_TIMESTAMP ,
                   `created_at` DATETIME NULL DEFAULT CURRENT_TIMESTAMP ,
                    PRIMARY KEY (`id`),
-                   INDEX `idx_4ps_member_id` (`4ps_member_id`),
+                   INDEX `idx_tuloy_id` (`tuloy_id`),
                    INDEX `idx_status` (`status`)
                 ) ENGINE = InnoDB;
             """)
@@ -133,7 +133,7 @@ async def lifespan(app: FastAPI):
                   `id` INT UNSIGNED AUTO_INCREMENT NOT NULL,
                   `match_id` INT UNSIGNED NULL,
                   `enrollment_id` INT UNSIGNED NOT NULL,
-                  `4ps_member_id` VARCHAR(50) NULL COMMENT 'Unique id across agency pre-generated from TULOY' ,
+                  `tuloy_id` VARCHAR(50) NULL COMMENT 'Unique id across agency pre-generated from TULOY' ,
                   `member_id` INT UNSIGNED NOT NULL COMMENT 'Entry_id' ,
                   `student_id` VARCHAR(50) NULL COMMENT 'CHED/Agency student id' ,
                   `mothers_maiden_first_name` VARCHAR(100) NULL,
