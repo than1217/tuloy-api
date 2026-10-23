@@ -202,7 +202,7 @@ def get_matched_ched_records(
     cursor = db.cursor(dictionary=True)
     try:
         cursor.execute(
-            "SELECT * FROM enroll_matched_CHED_tbl LIMIT %s OFFSET %s",
+            "SELECT * FROM vw_get_matched_CHED LIMIT %s OFFSET %s",
             (limit + 1, offset),
         )
         rows = cursor.fetchall()
