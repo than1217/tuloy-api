@@ -16,6 +16,16 @@ This project is a FastAPI application that provides secure authentication and an
 -   Python 3.8+
 -   A MySQL database
 
+## Project Structure
+
+The codebase is organized modularly:
+- **`main.py`**: Application entrypoint and startup configuration.
+- **`database.py`**: MySQL database connection and SSH tunnel logic.
+- **`schemas.py`**: Pydantic models for request validation.
+- **`security.py`**: JWT generation and password hashing.
+- **`utils.py`**: Helper functions (e.g., MD5 hashing, cache key builder).
+- **`routers/`**: Contains the API route definitions (`auth.py` and `beneficiaries.py`).
+
 ## Installation
 
 1.  **Clone the repository or download the project files.**
@@ -34,9 +44,12 @@ This project is a FastAPI application that provides secure authentication and an
 
 3.  **Install the required dependencies:**
 
+    Ensure your virtual environment is activated, then run:
+
     ```bash
     pip install -r requirements.txt
     ```
+    *(Alternatively, you can run `.\venv\Scripts\pip install -r requirements.txt` on Windows to guarantee the packages are installed locally in the virtual environment.)*
 
 4.  **Configure your environment variables:**
 
