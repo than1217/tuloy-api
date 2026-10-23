@@ -302,6 +302,56 @@ Content-Type: application/json
 
 ---
 
+### 6. `GET /GetMatchedChedBene`
+*(Requires ****** authentication)*
+
+Returns paginated records directly from the `enroll_matched_CHED_tbl` table containing the imported CHED matches.
+
+**Query parameters:**
+- `limit` (optional, default `100`, maximum `1000`): Number of records to return.
+- `offset` (optional, default `0`): Number of records to skip before returning the page.
+
+**Headers:**
+```http
+Authorization: ******
+```
+
+**Response:**
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "match_id": 1,
+      "enrollment_id": 0,
+      "tuloy_id": "4ps-33082079",
+      "member_id": 33082079,
+      "student_id": "0",
+      "mm_first_name": "LOIDA",
+      "mm_middle_name": "",
+      "mm_last_name": "AMURAO",
+      "degree_program_name": "BACHELOR OF SCIENCE IN BUSINESS ADMINISTRATION MAJOR IN MARKETING MANAGEMENT",
+      "degree_date_enrolled": null,
+      "degree_program_duration": null,
+      "degree_academic_year": "2026-2027",
+      "degree_year_level": 3,
+      "degree_semester": 1,
+      "enrollment_status": "ENROLLED",
+      "date_encoded": null,
+      "date_updated": null,
+      "created_at": "2026-10-23T10:00:00",
+      "updated_at": null
+    }
+  ],
+  "limit": 100,
+  "offset": 0,
+  "has_more": false,
+  "next_offset": null
+}
+```
+
+---
+
 ## Testing with cURL
 
 1. **Sign up:**
