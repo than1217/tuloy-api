@@ -90,7 +90,9 @@ def get_eligible_bene(
             "`date_of_birth`,`sex_id`,`member_id`,`listahanan_id`," \
             "`lrn`,`philsys`,`grade_level`,`m_maiden_name`,`account_no`," \
             "`bgy_psgc_code`,`barangay_name`,`client_status`,`roster_status`, `4ps_member_id` " \
-            "FROM vw_verify_member_bene LIMIT %s OFFSET %s",
+            "FROM vw_verify_member_bene WHERE `4ps_member_id` IN " \
+            "(SELECT `4ps_member_id` FROM enroll_matched_CHED_tbl) " \
+            "LIMIT %s OFFSET %s",
             (limit + 1, offset),
         )
         rows = cursor.fetchall()
@@ -145,7 +147,7 @@ def record_ched_response(
         if payload.status and payload.message == "FOUND" and payload.data:
             insert_data_query = """
                 INSERT INTO enroll_matched_CHED_tbl (
-                    match_id, enrollment_id, pppp_member_id, member_id, student_id,
+                    match_id, enrollment_id, `4ps_member_id`, member_id, student_id,
                     mothers_maiden_first_name, mothers_maiden_middle_name, mothers_maiden_last_name,
                     degree_program_name, degree_date_enrolled, degree_program_duration,
                     degree_academic_year, degree_year_level, degree_semester,

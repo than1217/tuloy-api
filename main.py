@@ -133,7 +133,7 @@ async def lifespan(app: FastAPI):
                   `id` INT UNSIGNED AUTO_INCREMENT NOT NULL,
                   `match_id` INT UNSIGNED NULL,
                   `enrollment_id` INT UNSIGNED NOT NULL,
-                  `pppp_member_id` VARCHAR(50) NULL COMMENT 'Unique id across agency pre-generated from TULOY' ,
+                  `4ps_member_id` VARCHAR(50) NULL COMMENT 'Unique id across agency pre-generated from TULOY' ,
                   `member_id` INT UNSIGNED NOT NULL COMMENT 'Entry_id' ,
                   `student_id` VARCHAR(50) NULL COMMENT 'CHED/Agency student id' ,
                   `mothers_maiden_first_name` VARCHAR(100) NULL,
