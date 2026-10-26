@@ -136,7 +136,7 @@ Registers a new API user.
 ---
 
 ### 2. `POST /token`
-Authenticates user credentials and returns a Bearer access token (OAuth2 password flow).
+Authenticates user credentials and returns an access and refresh token (OAuth2 password flow).
 
 **Request (Form Data / `application/x-www-form-urlencoded`):**
 - `username`: api_user
@@ -145,14 +145,35 @@ Authenticates user credentials and returns a Bearer access token (OAuth2 passwor
 **Response:**
 ```json
 {
-  "access_token": "eyJhbGciOi...",
+  "access_token": "your_access_token",
+  "refresh_token": "your_refresh_token",
   "token_type": "bearer"
 }
 ```
 
 ---
 
-### 3. `POST /VerifyMemberBene`
+### 3. `POST /refresh`
+Generates a new access token using a valid refresh token.
+
+**Request Body:**
+```json
+{
+  "refresh_token": "your_refresh_token"
+}
+```
+
+**Response:**
+```json
+{
+  "access_token": "your_new_access_token",
+  "token_type": "bearer"
+}
+```
+
+---
+
+### 4. `POST /VerifyMemberBene`
 *(Requires Bearer Token authentication)*
 
 Receives user details, computes an MD5 hash, and queries `vw_verify_member_bene`.
@@ -215,7 +236,7 @@ Content-Type: application/json
 
 ---
 
-### 4. `GET /GetEligibleBene`
+### 5. `GET /GetEligibleBene`
 *(Requires ****** authentication)*
 
 Returns one page of records from `vw_verify_member_bene` to avoid loading the entire dataset into memory or sending millions of rows in one response.
@@ -248,7 +269,7 @@ Use `next_offset` as the `offset` for the next request while `has_more` is `true
 
 ---
 
-### 5. `POST /PostEnrolleeMatchedCHED`
+### 6. `POST /PostEnrolleeMatchedCHED`
 *(Requires ****** authentication)*
 
 Receives CHED match data payload and persists it to the `matching_transaction_CHED_tbl` and `enroll_matched_CHED_tbl` tables.
@@ -302,7 +323,7 @@ Content-Type: application/json
 
 ---
 
-### 6. `GET /GetMatchedChedBene`
+### 7. `GET /GetMatchedChedBene`
 *(Requires ****** authentication)*
 
 Returns paginated records directly from the `enroll_matched_CHED_tbl` table containing the imported CHED matches.
