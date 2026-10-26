@@ -12,27 +12,60 @@ API_URL = "http://127.0.0.1/PostEnrolleeMatchedCHED"
 # Change to the appropriate token once authenticated, or disable auth temporarily if needed for import
 # For the sake of this script, we'll assume we can get a token via the token endpoint
 
-def get_token():
-    print("Getting token...")
-    response = requests.post(
-        "http://127.0.0.1/token",
-        data={"username": "admin", "password": "password123"}
-    )
-    if response.status_code == 200:
-        return response.json()["access_token"]
-    
-    # If admin user doesn't exist, create it
-    print("Creating admin user...")
-    requests.post("http://127.0.0.1/signup", json={"username": "admin", "password": "password123"})
-    response = requests.post(
-        "http://127.0.0.1/token",
-        data={"username": "admin", "password": "password123"}
-    )
-    return response.json()["access_token"]
+import threading
 
-def process_row(row, token):
+class TokenManager:
+    def __init__(self):
+        self.access_token = None
+        self.refresh_token = None
+        self.lock = threading.Lock()
+        self.login()
+
+    def login(self):
+        print("Getting token...")
+        response = requests.post(
+            "http://127.0.0.1/token",
+            data={"username": "admin", "password": "password123"}
+        )
+        if response.status_code == 200:
+            data = response.json()
+            self.access_token = data["access_token"]
+            self.refresh_token = data.get("refresh_token")
+            return
+        
+        print("Creating admin user...")
+        requests.post("http://127.0.0.1/signup", json={"username": "admin", "password": "password123"})
+        response = requests.post(
+            "http://127.0.0.1/token",
+            data={"username": "admin", "password": "password123"}
+        )
+        data = response.json()
+        self.access_token = data["access_token"]
+        self.refresh_token = data.get("refresh_token")
+
+    def get_access_token(self):
+        with self.lock:
+            return self.access_token
+
+    def refresh(self):
+        with self.lock:
+            if not self.refresh_token:
+                self.login()
+                return
+            
+            response = requests.post(
+                "http://127.0.0.1/refresh",
+                json={"refresh_token": self.refresh_token}
+            )
+            if response.status_code == 200:
+                self.access_token = response.json()["access_token"]
+            else:
+                self.login()
+
+def process_row(row, token_mgr):
+    access_token = token_mgr.get_access_token()
     headers = {
-        "Authorization": f"Bearer {token}",
+        "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json"
     }
 
@@ -77,16 +110,21 @@ def process_row(row, token):
     }
 
     resp = requests.post(API_URL, json=payload, headers=headers)
+    if resp.status_code == 401:
+        token_mgr.refresh()
+        headers["Authorization"] = f"Bearer {token_mgr.get_access_token()}"
+        resp = requests.post(API_URL, json=payload, headers=headers)
+
     if resp.status_code != 200:
         print(f"Failed to insert row {tuloy_id}: {resp.status_code} - {resp.text}")
     return resp.status_code == 200
 
-def process_chunk(chunk, token, chunk_index):
+def process_chunk(chunk, token_mgr, chunk_index):
     success_count = 0
     print(f"[Chunk {chunk_index}] Starting chunk of {len(chunk)} rows...")
     
     for i, row in enumerate(chunk):
-        if process_row(row, token):
+        if process_row(row, token_mgr):
             success_count += 1
             
         if (i + 1) % 1000 == 0:
@@ -100,7 +138,7 @@ def main():
         print(f"CSV file {CSV_FILE} not found.")
         return
         
-    token = get_token()
+    token_mgr = TokenManager()
     print("Token obtained. Starting import...")
 
     chunks = []
@@ -127,7 +165,7 @@ def main():
     # Process using a ThreadPoolExecutor with 5 workers (parallel of 5)
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
         # submit all chunks
-        futures = {executor.submit(process_chunk, chunk, token, idx): idx for idx, chunk in enumerate(chunks, 1)}
+        futures = {executor.submit(process_chunk, chunk, token_mgr, idx): idx for idx, chunk in enumerate(chunks, 1)}
         
         for future in concurrent.futures.as_completed(futures):
             try:
