@@ -104,14 +104,14 @@ To run the application, simply execute the `main.py` script:
 python main.py
 ```
 
-The API will attempt to bind to your local IP address (e.g., `http://192.168.x.x:8000`). If it cannot determine a local IP, it will fall back to `http://127.0.0.1:8000`.
+The API will attempt to bind to your local IP address on port 80 (e.g., `http://192.168.x.x`). If it cannot determine a local IP, it will fall back to `http://127.0.0.1`.
 
 ## Interactive API Documentation
 
 FastAPI provides built-in interactive Swagger documentation:
 
 1.  Start the application.
-2.  Open your browser and navigate to the IP address printed in the terminal (e.g. `http://192.168.x.x:8000/docs` or `http://127.0.0.1:8000/docs`).
+2.  Open your browser and navigate to the IP address printed in the terminal (e.g. `http://192.168.x.x/docs` or `http://127.0.0.1/docs`).
 3.  Use the `Authorize` button at the top right to log in and test protected routes.
 
 ---

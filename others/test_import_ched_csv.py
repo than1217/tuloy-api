@@ -8,14 +8,14 @@ from urllib.error import URLError
 # Get the absolute path to the parent directory where the CSV is located
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CSV_FILE = os.path.join(SCRIPT_DIR, "CHED-Matching.csv")
-API_URL = "http://127.0.0.1:8000/PostEnrolleeMatchedCHED"
+API_URL = "http://127.0.0.1/PostEnrolleeMatchedCHED"
 # Change to the appropriate token once authenticated, or disable auth temporarily if needed for import
 # For the sake of this script, we'll assume we can get a token via the token endpoint
 
 def get_token():
     print("Getting token...")
     response = requests.post(
-        "http://127.0.0.1:8000/token",
+        "http://127.0.0.1/token",
         data={"username": "admin", "password": "password123"}
     )
     if response.status_code == 200:
@@ -23,9 +23,9 @@ def get_token():
     
     # If admin user doesn't exist, create it
     print("Creating admin user...")
-    requests.post("http://127.0.0.1:8000/signup", json={"username": "admin", "password": "password123"})
+    requests.post("http://127.0.0.1/signup", json={"username": "admin", "password": "password123"})
     response = requests.post(
-        "http://127.0.0.1:8000/token",
+        "http://127.0.0.1/token",
         data={"username": "admin", "password": "password123"}
     )
     return response.json()["access_token"]
