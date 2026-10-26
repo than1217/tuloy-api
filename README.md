@@ -98,20 +98,20 @@ Before running the application, ensure your database has:
 
 ## Usage
 
-To run the application, use `uvicorn`:
+To run the application, simply execute the `main.py` script:
 
 ```bash
-python -m uvicorn main:app --reload
+python main.py
 ```
 
-The API will be available at `http://127.0.0.1:8000`.
+The API will attempt to bind to your local IP address (e.g., `http://192.168.x.x:8000`). If it cannot determine a local IP, it will fall back to `http://127.0.0.1:8000`.
 
 ## Interactive API Documentation
 
 FastAPI provides built-in interactive Swagger documentation:
 
 1.  Start the application.
-2.  Open your browser and navigate to [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
+2.  Open your browser and navigate to the IP address printed in the terminal (e.g. `http://192.168.x.x:8000/docs` or `http://127.0.0.1:8000/docs`).
 3.  Use the `Authorize` button at the top right to log in and test protected routes.
 
 ---

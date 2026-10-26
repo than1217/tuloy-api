@@ -196,3 +196,20 @@ app = FastAPI(title="Tuloy API", lifespan=lifespan)
 
 app.include_router(auth.router)
 app.include_router(beneficiaries.router)
+
+if __name__ == "__main__":
+    import uvicorn
+    import socket
+
+    def get_local_ip():
+        try:
+            # Connect to a dummy external address to find out the default local IP
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.connect(("8.8.8.8", 80))
+                return s.getsockname()[0]
+        except Exception:
+            return "127.0.0.1"
+
+    local_ip = get_local_ip()
+    print(f"Starting server on http://{local_ip}:8000")
+    uvicorn.run("main:app", host=local_ip, port=8000, reload=True)
