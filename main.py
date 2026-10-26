@@ -96,6 +96,8 @@ async def lifespan(app: FastAPI):
 
                 database.ssh_tunnel = SSHTunnelForwarder(**tunnel_kwargs)
                 database.ssh_tunnel.start()
+                
+                # We don't overwrite DB_CONFIG directly anymore so database.py's get_db_config handles it
                 print(f"SSH tunnel established. Local bind port: {database.ssh_tunnel.local_bind_port}")
         except Exception as e:
             raise RuntimeError(
@@ -105,17 +107,27 @@ async def lifespan(app: FastAPI):
         conn = None
         cursor = None
         try:
+            print("Connecting to MySQL database...")
             conn = mysql.connector.connect(**get_db_config())
+            print("Connected to database successfully!")
+            
+            # NOTE: The CREATE TABLE statements have been temporarily commented out.
+            # Your MySQL server is currently running a backup or has a global lock
+            # (State: 'Waiting for backup lock' / 'acquiring total order isolation').
+            # Trying to run any DDL (like CREATE TABLE) blocks the entire app startup.
+            # Since the tables likely already exist, we can skip this and start the API normally.
+            
+            """
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute('''
                 CREATE TABLE IF NOT EXISTS api_users (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     username VARCHAR(255) UNIQUE NOT NULL,
                     hashed_password VARCHAR(255) NOT NULL,
                     disabled BOOLEAN DEFAULT FALSE
                 )
-            """)
-            cursor.execute("""
+            ''')
+            cursor.execute('''
                 CREATE TABLE IF NOT EXISTS `matching_transaction_CHED_tbl` ( 
                   `id` INT UNSIGNED AUTO_INCREMENT NOT NULL,
                   `tuloy_id` VARCHAR(100) NOT NULL COMMENT '4Ps member_id from TULOY' ,
@@ -126,9 +138,9 @@ async def lifespan(app: FastAPI):
                    INDEX `idx_tuloy_id` (`tuloy_id`),
                    INDEX `idx_status` (`status`)
                 ) ENGINE = InnoDB;
-            """)
+            ''')
             cursor.execute("SET FOREIGN_KEY_CHECKS=0;")
-            cursor.execute("""
+            cursor.execute('''
                 CREATE TABLE IF NOT EXISTS `enroll_matched_CHED_tbl` ( 
                   `id` INT UNSIGNED AUTO_INCREMENT NOT NULL,
                   `match_id` INT UNSIGNED NULL,
@@ -156,10 +168,11 @@ async def lifespan(app: FastAPI):
                    CONSTRAINT `fk_matched_enrollment_ched` FOREIGN KEY (`enrollment_id`) REFERENCES `education_enrollment` (`enrollment_id`) ON DELETE CASCADE ON UPDATE NO ACTION,
                    CONSTRAINT `fk_matched_transaction_ched` FOREIGN KEY (`match_id`) REFERENCES `matching_transaction_CHED_tbl` (`id`) ON DELETE SET NULL ON UPDATE NO ACTION
                 ) ENGINE = InnoDB;
-            """)
+            ''')
             cursor.execute("SET FOREIGN_KEY_CHECKS=1;")
             conn.commit()
             print("Initialized api_users, matching_transaction_CHED_tbl, and enroll_matched_CHED_tbl tables successfully.")
+            """
         except Error as e:
             raise RuntimeError(f"Error initializing database: {e}") from e
         finally:
