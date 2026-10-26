@@ -60,11 +60,7 @@ def process_row(row, token):
             "id": tuloy_id,
             "member_id": member_id,
             "student_id": 0, # Not explicitly available in CSV
-            "mothers_maiden": {
-                "first_name": row.get("GRANTEE FIRST_NAME", ""),
-                "middle_name": row.get("GRANTEE MIDDLE_NAME", ""),
-                "last_name": row.get("GRANTEE LAST_NAME", "")
-            },
+            "mothers_maiden": None,
             "degree": {
                 "program_name": row.get("Degree Program", ""),
                 "date_enrolled": None,
