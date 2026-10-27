@@ -5,7 +5,7 @@ from fastapi_cache.decorator import cache
 import os
 
 from database import get_db_connection
-from schemas import UserInput, ChedResponsePayload, MothersMaiden, Degree
+from schemas import UserInput, ChedResponsePayload, MothersMaiden, Degree, TesdaResponsePayload, ShortCourse
 from security import get_current_user
 
 router = APIRouter(tags=["Beneficiaries"])
@@ -186,6 +186,89 @@ def record_ched_response(
             
         db.commit()
         return {"message": "CHED response recorded successfully."}
+    except Error as e:
+        db.rollback()
+        print(f"\\n[ERROR] Database error: {e}\\n")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        cursor.close()
+
+@router.post("/PostEnrolleeMatchedTESDA")
+def record_tesda_response(
+    payload: TesdaResponsePayload, 
+    current_user: dict = Depends(get_current_user), 
+    db = Depends(get_db_connection)
+):
+    cursor = db.cursor()
+    try:
+        # 1. Insert into transaction status table
+        insert_txn_query = """
+            INSERT INTO matching_transaction_TESDA_tbl 
+            (`tuloy_id`, `status`) 
+            VALUES (%s, %s)
+        """
+        
+        member_id_str = ""
+        if payload.data:
+            if payload.data.id:
+                member_id_str = str(payload.data.id)
+            elif payload.data.member_id:
+                member_id_str = str(payload.data.member_id)
+                
+        db_status = payload.message or ("FOUND" if payload.status else "NOT FOUND")
+        
+        cursor.execute(insert_txn_query, (
+            member_id_str, 
+            db_status
+        ))
+        txn_id = cursor.lastrowid
+        
+        # 2. Insert into data table if status is matched (or status == True and message == "FOUND")
+        if payload.status and payload.message == "FOUND" and payload.data:
+            insert_data_query = """
+                INSERT INTO enroll_matched_TESDA_tbl (
+                    match_id, enrollment_id, `tuloy_id`, member_id, uli,
+                    mm_first_name, mm_middle_name, mm_last_name,
+                    diploma_program_name, diploma_date_enrolled, diploma_program_duration,
+                    diploma_academic_year, diploma_year_level, diploma_semester,
+                    course_program_name, course_start_date, course_end_date, course_training_status,
+                    enrollment_status, date_encoded, date_updated
+                ) VALUES (
+                    %s, %s, %s, %s, %s,
+                    %s, %s, %s,
+                    %s, %s, %s,
+                    %s, %s, %s,
+                    %s, %s, %s, %s,
+                    %s, %s, %s
+                )
+            """
+            
+            data = payload.data
+            mmn = data.mothers_maiden or MothersMaiden()
+            deg = data.diploma or Degree()
+            course = data.short_course or ShortCourse()
+            
+            # Use 0 for enrollment_id if not present since it's NOT NULL
+            enrollment_id = payload.enrollment_id if hasattr(payload, 'enrollment_id') else 0
+
+            # Convert blank strings to None for date fields so MySQL handles them properly
+            diploma_date_enrolled_val = deg.date_enrolled if deg.date_enrolled and deg.date_enrolled.strip() else None
+            course_start_date_val = course.start_date if course.start_date and course.start_date.strip() else None
+            course_end_date_val = course.end_date if course.end_date and course.end_date.strip() else None
+            date_encoded_val = data.date_encoded if data.date_encoded and data.date_encoded.strip() else None
+            date_updated_val = data.date_updated if data.date_updated and data.date_updated.strip() else None
+            
+            cursor.execute(insert_data_query, (
+                txn_id, enrollment_id, data.id, data.member_id or 0, data.uli,
+                mmn.first_name, mmn.middle_name, mmn.last_name,
+                deg.program_name, diploma_date_enrolled_val, deg.program_duration,
+                deg.academic_year, deg.year_level, deg.semester,
+                course.program_name, course_start_date_val, course_end_date_val, course.training_status,
+                data.enrollment_status, date_encoded_val, date_updated_val
+            ))
+            
+        db.commit()
+        return {"message": "TESDA response recorded successfully."}
     except Error as e:
         db.rollback()
         print(f"\\n[ERROR] Database error: {e}\\n")

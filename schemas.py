@@ -46,3 +46,27 @@ class ChedResponsePayload(BaseModel):
     data: Optional[ChedData] = None
     error_code: Optional[str] = None
     enrollment_id: Optional[int] = 0  # Required in db for FK to education_enrollment
+
+class ShortCourse(BaseModel):
+    program_name: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    training_status: Optional[str] = None
+
+class TesdaData(BaseModel):
+    id: Optional[str] = None
+    member_id: Optional[int] = None
+    uli: Optional[str] = None
+    mothers_maiden: Optional[MothersMaiden] = None
+    diploma: Optional[Degree] = None
+    short_course: Optional[ShortCourse] = None
+    enrollment_status: Optional[str] = None
+    date_encoded: Optional[str] = None
+    date_updated: Optional[str] = None
+
+class TesdaResponsePayload(BaseModel):
+    status: bool
+    message: Optional[str] = None
+    data: Optional[TesdaData] = None
+    error_code: Optional[str] = None
+    enrollment_id: Optional[int] = 0

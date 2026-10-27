@@ -373,6 +373,65 @@ Authorization: ******
 
 ---
 
+### 8. `POST /PostEnrolleeMatchedTESDA`
+*(Requires ****** authentication)*
+
+Receives TESDA match data payload and persists it to the `matching_transaction_TESDA_tbl` and `enroll_matched_TESDA_tbl` tables.
+
+**Headers:**
+```http
+Authorization: ******
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "status": true,
+  "message": "FOUND",
+  "data": {
+    "id": "4ps-1234",
+    "member_id": 1234,
+    "uli": 123456,
+    "mothers_maiden": {
+      "first_name": "JUANA",
+      "middle_name": "",
+      "last_name": "MARIA"
+    },
+    "diploma": {
+      "program_name": "",
+      "date_enrolled": "",
+      "program_duration": 4,
+      "academic_year": "2026-2027",
+      "year_level": 1,
+      "semester": 1
+    },
+    "short_course": {
+      "program_name": "",
+      "start_date": "",
+      "end_date": "",
+      "training_status": ""
+    },
+    "enrollment_status": "",
+    "date_encoded": "",
+    "date_updated": ""
+  },
+  "error_code": null
+}
+```
+
+**Responses:**
+- **`200 OK`:** 
+  ```json
+  {
+    "message": "TESDA response recorded successfully."
+  }
+  ```
+- **`401 Unauthorized`:** Missing, invalid, or expired ******
+- **`500 Internal Server Error`:** Database connection or query execution failure.
+
+---
+
 ## Testing with cURL
 
 1. **Sign up:**
