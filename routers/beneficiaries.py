@@ -227,19 +227,15 @@ def record_tesda_response(
         if payload.status and payload.message == "FOUND" and payload.data:
             insert_data_query = """
                 INSERT INTO enroll_matched_TESDA_tbl (
-                    match_id, enrollment_id, `tuloy_id`, member_id, uli,
+                    match_id, enrollment_id, `tuloy_id`, member_id, uli_id,
                     mm_first_name, mm_middle_name, mm_last_name,
-                    diploma_program_name, diploma_date_enrolled, diploma_program_duration,
-                    diploma_academic_year, diploma_year_level, diploma_semester,
-                    course_program_name, course_start_date, course_end_date, course_training_status,
-                    enrollment_status, date_encoded, date_updated
+                    diploma, short_course,
+                    date_encoded, date_updated
                 ) VALUES (
                     %s, %s, %s, %s, %s,
                     %s, %s, %s,
-                    %s, %s, %s,
-                    %s, %s, %s,
-                    %s, %s, %s, %s,
-                    %s, %s, %s
+                    %s, %s,
+                    %s, %s
                 )
             """
             
@@ -258,13 +254,29 @@ def record_tesda_response(
             date_encoded_val = data.date_encoded if data.date_encoded and data.date_encoded.strip() else None
             date_updated_val = data.date_updated if data.date_updated and data.date_updated.strip() else None
             
+            import json
+            diploma_json = json.dumps({
+                "program_name": deg.program_name,
+                "date_enrolled": diploma_date_enrolled_val,
+                "program_duration": deg.program_duration,
+                "academic_year": deg.academic_year,
+                "year_level": deg.year_level,
+                "semester": deg.semester,
+                "enrollment_status": data.enrollment_status
+            })
+            
+            short_course_json = json.dumps({
+                "program_name": course.program_name,
+                "start_date": course_start_date_val,
+                "end_date": course_end_date_val,
+                "training_status": course.training_status
+            })
+            
             cursor.execute(insert_data_query, (
                 txn_id, enrollment_id, data.id, data.member_id or 0, data.uli,
                 mmn.first_name, mmn.middle_name, mmn.last_name,
-                deg.program_name, diploma_date_enrolled_val, deg.program_duration,
-                deg.academic_year, deg.year_level, deg.semester,
-                course.program_name, course_start_date_val, course_end_date_val, course.training_status,
-                data.enrollment_status, date_encoded_val, date_updated_val
+                diploma_json, short_course_json,
+                date_encoded_val, date_updated_val
             ))
             
         db.commit()
