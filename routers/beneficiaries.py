@@ -319,3 +319,49 @@ def get_matched_ched_records(
     finally:
         cursor.close()
 
+@router.get("/GetMatchedTesdaBene")
+def get_matched_tesda_records(
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db_connection),
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+):
+    cursor = db.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT * FROM enroll_matched_TESDA_tbl LIMIT %s OFFSET %s",
+            (limit + 1, offset),
+        )
+        rows = cursor.fetchall()
+        has_more = len(rows) > limit
+        
+        # Parse JSON fields before returning to avoid stringified JSON in output
+        import json
+        for row in rows:
+            if row.get('diploma') and isinstance(row['diploma'], str):
+                try:
+                    row['diploma'] = json.loads(row['diploma'])
+                except json.JSONDecodeError:
+                    pass
+            if row.get('short_course') and isinstance(row['short_course'], str):
+                try:
+                    row['short_course'] = json.loads(row['short_course'])
+                except json.JSONDecodeError:
+                    pass
+
+        return jsonable_encoder(
+            {
+                "items": rows[:limit],
+                "limit": limit,
+                "offset": offset,
+                "has_more": has_more,
+                "next_offset": offset + limit if has_more else None,
+            },
+            custom_encoder={bytes: lambda value: value.hex()}
+        )
+    except Error as e:
+        print(f"\\n[ERROR] Database error while retrieving matched TESDA records: {e}\\n")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        cursor.close()
+

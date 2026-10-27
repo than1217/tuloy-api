@@ -432,6 +432,64 @@ Content-Type: application/json
 
 ---
 
+### 9. `GET /GetMatchedTesdaBene`
+*(Requires ****** authentication)*
+
+Returns paginated records directly from the `enroll_matched_TESDA_tbl` table containing the imported TESDA matches.
+
+**Query parameters:**
+- `limit` (optional, default `100`, maximum `1000`): Number of records to return.
+- `offset` (optional, default `0`): Number of records to skip before returning the page.
+
+**Headers:**
+```http
+Authorization: ******
+```
+
+**Response:**
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "match_id": 1,
+      "enrollment_id": 0,
+      "tuloy_id": "4ps-33082079",
+      "member_id": 33082079,
+      "uli_id": "123456",
+      "mm_first_name": "LOIDA",
+      "mm_middle_name": "",
+      "mm_last_name": "AMURAO",
+      "diploma": {
+        "program_name": "BS IT",
+        "date_enrolled": "2026-08-01",
+        "program_duration": 4,
+        "academic_year": "2026-2027",
+        "year_level": 1,
+        "semester": 1,
+        "enrollment_status": "ENROLLED"
+      },
+      "short_course": {
+        "program_name": "",
+        "start_date": "",
+        "end_date": "",
+        "training_status": ""
+      },
+      "date_encoded": null,
+      "date_updated": null,
+      "created_at": "2026-10-23T10:00:00",
+      "updated_at": null
+    }
+  ],
+  "limit": 100,
+  "offset": 0,
+  "has_more": false,
+  "next_offset": null
+}
+```
+
+---
+
 ## Testing with cURL
 
 1. **Sign up:**
