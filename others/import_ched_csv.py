@@ -2,15 +2,29 @@ import csv
 import json
 import requests
 import os
+import argparse
 import concurrent.futures
 from urllib.error import URLError
 
 # Get the absolute path to the parent directory where the CSV is located
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CSV_FILE = os.path.join(SCRIPT_DIR, "CHED-Matching.csv")
-API_URL = "http://127.0.0.1/PostEnrolleeMatchedCHED"
-# Change to the appropriate token once authenticated, or disable auth temporarily if needed for import
-# For the sake of this script, we'll assume we can get a token via the token endpoint
+
+# Set up argument parsing
+parser = argparse.ArgumentParser(description="Import CHED CSV data via API.")
+parser.add_argument("--host", type=str, default="http://127.0.0.1", help="The API host URL (e.g., http://127.0.0.1 or https://api.example.com)")
+parser.add_argument("--port", type=str, default="", help="The API port (if any, e.g., 8000)")
+parser.add_argument("--csv", type=str, default=CSV_FILE, help="Path to the CSV file to import")
+args = parser.parse_args()
+
+CSV_FILE = args.csv
+
+# Construct the base URL
+BASE_URL = args.host
+if args.port:
+    BASE_URL = f"{args.host}:{args.port}"
+
+API_URL = f"{BASE_URL}/PostEnrolleeMatchedCHED"
 
 import threading
 
@@ -22,9 +36,9 @@ class TokenManager:
         self.login()
 
     def login(self):
-        print("Getting token...")
+        print(f"Getting token from {BASE_URL}/token...")
         response = requests.post(
-            "http://127.0.0.1/token",
+            f"{BASE_URL}/token",
             data={"username": "admin", "password": "password123"}
         )
         if response.status_code == 200:
@@ -34,9 +48,9 @@ class TokenManager:
             return
         
         print("Creating admin user...")
-        requests.post("http://127.0.0.1/signup", json={"username": "admin", "password": "password123"})
+        requests.post(f"{BASE_URL}/signup", json={"username": "admin", "password": "password123"})
         response = requests.post(
-            "http://127.0.0.1/token",
+            f"{BASE_URL}/token",
             data={"username": "admin", "password": "password123"}
         )
         data = response.json()
@@ -54,7 +68,7 @@ class TokenManager:
                 return
             
             response = requests.post(
-                "http://127.0.0.1/refresh",
+                f"{BASE_URL}/refresh",
                 json={"refresh_token": self.refresh_token}
             )
             if response.status_code == 200:
