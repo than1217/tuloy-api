@@ -229,12 +229,10 @@ def record_tesda_response(
                 INSERT INTO enroll_matched_TESDA_tbl (
                     match_id, enrollment_id, `tuloy_id`, member_id, uli_id,
                     mm_first_name, mm_middle_name, mm_last_name,
-                    diploma, short_course,
-                    date_encoded, date_updated
+                    diploma, short_course
                 ) VALUES (
                     %s, %s, %s, %s, %s,
                     %s, %s, %s,
-                    %s, %s,
                     %s, %s
                 )
             """
@@ -262,21 +260,24 @@ def record_tesda_response(
                 "academic_year": deg.academic_year,
                 "year_level": deg.year_level,
                 "semester": deg.semester,
-                "enrollment_status": data.enrollment_status
+                "enrollment_status": data.enrollment_status,
+                "date_encoded": date_encoded_val,
+                "date_updated": date_updated_val
             })
             
             short_course_json = json.dumps({
                 "program_name": course.program_name,
                 "start_date": course_start_date_val,
                 "end_date": course_end_date_val,
-                "training_status": course.training_status
+                "training_status": course.training_status,
+                "date_encoded": date_encoded_val,
+                "date_updated": date_updated_val
             })
             
             cursor.execute(insert_data_query, (
                 txn_id, enrollment_id, data.id, data.member_id or 0, data.uli,
                 mmn.first_name, mmn.middle_name, mmn.last_name,
-                diploma_json, short_course_json,
-                date_encoded_val, date_updated_val
+                diploma_json, short_course_json
             ))
             
         db.commit()
