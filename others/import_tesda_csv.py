@@ -9,6 +9,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from dotenv import load_dotenv
+from tqdm import tqdm
 
 # Load environment variables from .env file
 load_dotenv(override=True)
@@ -267,9 +268,15 @@ def main():
         post_successes = 0
         failures = 0
 
-        for index, row in enumerate(rows, start=2):
+        # Set up the progress bar
+        pbar = tqdm(rows, desc="Processing CSV rows", unit="row")
+
+        for index, row in enumerate(pbar, start=2):
             if row.get(None):
                 raise ValueError(f"CSV row {index} has more fields than the header")
+
+            # Update progress bar description to show current status
+            pbar.set_postfix({"Verified": verify_successes, "Posted": post_successes, "Errors": failures})
 
             if args.reverify or not (row.get("VERIFY STATUS") or "").strip():
                 if args.reverify:
@@ -301,7 +308,7 @@ def main():
                     row["IMPORT ERROR"] = f"Verification failed: {error}"
                     failures += 1
                     save_csv(args.csv, fieldnames, rows)
-                    print(f"Row {index}: {row['IMPORT ERROR']}", file=sys.stderr)
+                    tqdm.write(f"Row {index}: {row['IMPORT ERROR']}")
                     continue
 
             if args.verify_only:
@@ -321,8 +328,12 @@ def main():
                 row["TESDA POST STATUS"] = "FAILED"
                 row["IMPORT ERROR"] = f"TESDA submission failed: {error}"
                 failures += 1
-                print(f"Row {index}: {row['IMPORT ERROR']}", file=sys.stderr)
+                tqdm.write(f"Row {index}: {row['IMPORT ERROR']}")
             save_csv(args.csv, fieldnames, rows)
+
+        # Ensure final update to progress bar postfix before closing
+        pbar.set_postfix({"Verified": verify_successes, "Posted": post_successes, "Errors": failures})
+        pbar.close()
 
         print(
             f"Finished. Verified: {verify_successes}; "
