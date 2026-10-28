@@ -1,5 +1,11 @@
 {
     "python.defaultInterpreterPath": "${workspaceFolder}\\venv\\Scripts\\python.exe",
     "python.terminal.activateEnvironment": true,
-    "python.terminal.useEnvFile": true
+    "python.terminal.useEnvFile": true,
+    "chat.tools.terminal.autoApprove": {
+        "/^git check-ignore -v \\.env$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
 }
