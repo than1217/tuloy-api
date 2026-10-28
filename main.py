@@ -210,6 +210,7 @@ if __name__ == "__main__":
         except Exception:
             return "127.0.0.1"
 
-    local_ip = get_local_ip()
-    print(f"Starting server on http://{local_ip}")
-    uvicorn.run("main:app", host=local_ip, port=80, reload=True)
+    local_ip = "0.0.0.0"
+    port = 8000
+    print(f"Starting server on http://{local_ip}:{port}")
+    uvicorn.run("main:app", host=local_ip, port=port, reload=False)
