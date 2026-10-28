@@ -283,6 +283,7 @@ def main():
                     row["VERIFY STATUS"] = ""
                     row["TULOY ID"] = ""
                     row["MEMBER ID"] = ""
+                    row["TESDA POST STATUS"] = ""
                 try:
                     result = client.post_json(
                         "/VerifyMemberBene", verify_payload(row)
