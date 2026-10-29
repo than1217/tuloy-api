@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
 from mysql.connector import Error
-from fastapi_cache.decorator import cache
 import os
 
 from database import get_db_connection
@@ -9,8 +8,6 @@ from schemas import UserInput, ChedResponsePayload, MothersMaiden, Degree, Tesda
 from security import get_current_user
 
 router = APIRouter(tags=["Beneficiaries"])
-
-CACHE_EXPIRE_SECONDS = int(os.getenv("CACHE_EXPIRE_SECONDS", "1200"))
 
 @router.post("/VerifyMemberBene")
 def match_user(user: UserInput, current_user: dict = Depends(get_current_user), db = Depends(get_db_connection)):
@@ -77,7 +74,6 @@ def match_user(user: UserInput, current_user: dict = Depends(get_current_user), 
         cursor.close()
 
 @router.get("/GetEligibleBene")
-@cache(expire=CACHE_EXPIRE_SECONDS, namespace="eligible-bene")
 def get_eligible_bene(
     current_user: dict = Depends(get_current_user),
     db=Depends(get_db_connection),

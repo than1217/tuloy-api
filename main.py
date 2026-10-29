@@ -8,26 +8,17 @@ from mysql.connector import Error
 import database
 from database import get_db_config
 
-from fastapi_cache import FastAPICache
-from fastapi_cache.backends.inmemory import InMemoryBackend
-from fastapi_cache.backends.redis import RedisBackend
-from redis import asyncio as aioredis
 try:
     from sshtunnel import SSHTunnelForwarder
 except ImportError:
     SSHTunnelForwarder = None
 
-from utils import cache_key_builder
 from routers import auth, beneficiaries
 
 load_dotenv(override=True)
 
-CACHE_EXPIRE_SECONDS = int(os.getenv("CACHE_EXPIRE_SECONDS", "1200"))
-redis_client = None
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global redis_client
     load_dotenv(override=True)
     database.DB_CONFIG.update({
         "host": os.getenv("DB_HOST"),
@@ -36,32 +27,6 @@ async def lifespan(app: FastAPI):
         "user": os.getenv("DB_USER"),
         "password": os.getenv("DB_PASSWORD"),
     })
-
-    # Initialize Redis for caching (with automatic InMemoryBackend fallback)
-    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
-    try:
-        redis_client = aioredis.from_url(redis_url)
-        await redis_client.ping()
-        FastAPICache.init(
-            RedisBackend(redis_client),
-            prefix="tuloy-api-cache",
-            expire=CACHE_EXPIRE_SECONDS,
-            key_builder=cache_key_builder,
-        )
-        print(f"Redis cache initialized at {redis_url} (TTL: {CACHE_EXPIRE_SECONDS}s)")
-    except Exception as e:
-        if redis_client is not None:
-            await redis_client.aclose()
-            redis_client = None
-        FastAPICache.init(
-            InMemoryBackend(),
-            prefix="tuloy-api-cache",
-            expire=CACHE_EXPIRE_SECONDS,
-            key_builder=cache_key_builder,
-        )
-        print(
-            f"Redis unavailable ({e}). Falling back to InMemoryBackend (TTL: {CACHE_EXPIRE_SECONDS}s)"
-        )
 
     ssh_host = os.getenv("SSH_HOST")
     try:
@@ -183,10 +148,6 @@ async def lifespan(app: FastAPI):
 
         yield
     finally:
-        if redis_client is not None:
-            await redis_client.aclose()
-            redis_client = None
-            print("Redis connection closed.")
         if database.ssh_tunnel:
             database.ssh_tunnel.stop()
             database.ssh_tunnel = None
