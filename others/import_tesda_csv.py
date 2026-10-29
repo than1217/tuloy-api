@@ -227,7 +227,13 @@ def save_csv(path, fieldnames, rows):
             writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
             writer.writeheader()
             writer.writerows(rows)
-        os.replace(temporary_path, path)
+        try:
+            os.replace(temporary_path, path)
+        except PermissionError as error:
+            raise RuntimeError(
+                f"Cannot update CSV checkpoint '{path}'. Close the CSV in Excel "
+                "or any other application, then rerun the importer."
+            ) from error
     finally:
         if temporary_path and os.path.exists(temporary_path):
             os.remove(temporary_path)
