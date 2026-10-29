@@ -2,13 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
 from mysql.connector import Error
 import json
-import os
 
 from database import get_db_connection
+from logging_config import configure_logging
 from schemas import UserInput, ChedResponsePayload, MothersMaiden, Degree, TesdaResponsePayload
 from security import get_current_user
 
 router = APIRouter(tags=["Beneficiaries"])
+logger = configure_logging()
 
 @router.post("/VerifyMemberBene")
 def match_user(user: UserInput, current_user: dict = Depends(get_current_user), db = Depends(get_db_connection)):
@@ -69,7 +70,7 @@ def match_user(user: UserInput, current_user: dict = Depends(get_current_user), 
             }
             
     except Error as e:
-        print(f"\\n[ERROR] Database error during verification: {e}\\n")
+        logger.exception("Database error during beneficiary verification")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     finally:
         cursor.close()
@@ -106,7 +107,7 @@ def get_eligible_bene(
             custom_encoder={bytes: lambda value: value.hex()},
         )
     except Error as e:
-        print(f"\\n[ERROR] Database error while retrieving eligible beneficiaries: {e}\\n")
+        logger.exception("Database error while retrieving eligible beneficiaries")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     finally:
         cursor.close()
@@ -184,7 +185,7 @@ def record_ched_response(
         return {"message": "CHED response recorded successfully."}
     except Error as e:
         db.rollback()
-        print(f"\\n[ERROR] Database error: {e}\\n")
+        logger.exception("Database error while recording CHED response")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     finally:
         cursor.close()
@@ -319,7 +320,7 @@ def record_tesda_response(
         return {"message": "TESDA response recorded successfully."}
     except Error as e:
         db.rollback()
-        print(f"\\n[ERROR] Database error: {e}\\n")
+        logger.exception("Database error while recording TESDA response")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     finally:
         cursor.close()
@@ -350,7 +351,7 @@ def get_matched_ched_records(
             custom_encoder={bytes: lambda value: value.hex()}
         )
     except Error as e:
-        print(f"\\n[ERROR] Database error while retrieving matched CHED records: {e}\\n")
+        logger.exception("Database error while retrieving matched CHED records")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     finally:
         cursor.close()
@@ -396,7 +397,7 @@ def get_matched_tesda_records(
             custom_encoder={bytes: lambda value: value.hex()}
         )
     except Error as e:
-        print(f"\\n[ERROR] Database error while retrieving matched TESDA records: {e}\\n")
+        logger.exception("Database error while retrieving matched TESDA records")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     finally:
         cursor.close()

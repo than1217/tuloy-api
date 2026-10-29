@@ -1,5 +1,7 @@
 from fastapi import FastAPI
+from fastapi import Request
 import os
+import time
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 import mysql.connector
@@ -7,6 +9,7 @@ from mysql.connector import Error
 
 import database
 from database import get_db_config
+from logging_config import configure_logging
 
 try:
     from sshtunnel import SSHTunnelForwarder
@@ -14,6 +17,8 @@ except ImportError:
     SSHTunnelForwarder = None
 
 from routers import auth, beneficiaries
+
+logger = configure_logging()
 
 load_dotenv(override=True)
 
@@ -63,8 +68,12 @@ async def lifespan(app: FastAPI):
                 database.ssh_tunnel.start()
                 
                 # We don't overwrite DB_CONFIG directly anymore so database.py's get_db_config handles it
-                print(f"SSH tunnel established. Local bind port: {database.ssh_tunnel.local_bind_port}")
+                logger.info(
+                    "SSH tunnel established on local port %s",
+                    database.ssh_tunnel.local_bind_port,
+                )
         except Exception as e:
+            logger.exception("Failed to establish SSH tunnel")
             raise RuntimeError(
                 f"Failed to establish SSH tunnel to {ssh_host}: {e}"
             ) from e
@@ -72,9 +81,9 @@ async def lifespan(app: FastAPI):
         conn = None
         cursor = None
         try:
-            print("Connecting to MySQL database...")
+            logger.info("Connecting to MySQL database")
             conn = mysql.connector.connect(**get_db_config())
-            print("Connected to database successfully!")
+            logger.info("Connected to database successfully")
             
             # NOTE: The CREATE TABLE statements have been temporarily commented out.
             # Your MySQL server is currently running a backup or has a global lock
@@ -139,6 +148,7 @@ async def lifespan(app: FastAPI):
             print("Initialized api_users, matching_transaction_CHED_tbl, and enroll_matched_CHED_tbl tables successfully.")
             """
         except Error as e:
+            logger.exception("Error initializing database connection")
             raise RuntimeError(f"Error initializing database: {e}") from e
         finally:
             if cursor:
@@ -146,14 +156,42 @@ async def lifespan(app: FastAPI):
             if conn:
                 conn.close()
 
+        logger.info("API started")
         yield
     finally:
         if database.ssh_tunnel:
             database.ssh_tunnel.stop()
             database.ssh_tunnel = None
-            print("SSH tunnel closed.")
+            logger.info("SSH tunnel closed")
+        logger.info("API stopped")
 
 app = FastAPI(title="Tuloy API", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    started_at = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        logger.exception(
+            "Unhandled exception for %s %s",
+            request.method,
+            request.url.path,
+        )
+        raise
+
+    elapsed_ms = (time.perf_counter() - started_at) * 1000
+    log_method = logger.error if response.status_code >= 500 else logger.info
+    log_method(
+        "%s %s returned %s in %.1f ms",
+        request.method,
+        request.url.path,
+        response.status_code,
+        elapsed_ms,
+    )
+    return response
+
 
 app.include_router(auth.router)
 app.include_router(beneficiaries.router)
@@ -173,5 +211,5 @@ if __name__ == "__main__":
 
     local_ip = "0.0.0.0"
     port = 8000
-    print(f"Starting server on http://{local_ip}:{port}")
+    logger.info("Starting server on http://%s:%s", local_ip, port)
     uvicorn.run("main:app", host=local_ip, port=port, reload=False)
