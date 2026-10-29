@@ -4,6 +4,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 from datetime import datetime
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -227,13 +228,22 @@ def save_csv(path, fieldnames, rows):
             writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
             writer.writeheader()
             writer.writerows(rows)
-        try:
-            os.replace(temporary_path, path)
-        except PermissionError as error:
-            raise RuntimeError(
-                f"Cannot update CSV checkpoint '{path}'. Close the CSV in Excel "
-                "or any other application, then rerun the importer."
-            ) from error
+        for attempt in range(5):
+            try:
+                os.replace(temporary_path, path)
+                break
+            except PermissionError as error:
+                if attempt < 4:
+                    time.sleep(0.25 * (2**attempt))
+                    continue
+                winerror = getattr(error, "winerror", None)
+                windows_error = f" Windows error {winerror}." if winerror else ""
+                raise RuntimeError(
+                    f"Cannot update CSV checkpoint '{path}' after several attempts."
+                    f"{windows_error} A process may be temporarily preventing the "
+                    "file from being replaced; close any preview/editor and pause "
+                    "file-sync or antivirus scanning, then rerun the importer."
+                ) from error
     finally:
         if temporary_path and os.path.exists(temporary_path):
             os.remove(temporary_path)
