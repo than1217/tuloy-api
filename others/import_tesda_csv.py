@@ -11,10 +11,10 @@ from urllib.request import Request, urlopen
 from dotenv import load_dotenv
 from tqdm import tqdm
 
-# Load environment variables from .env file
-load_dotenv(override=True)
-
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
+load_dotenv(dotenv_path=os.path.join(PROJECT_DIR, ".env"), override=True)
+
 DEFAULT_CSV = os.path.join(SCRIPT_DIR, "TESDA Matching 136.csv")
 CHECKPOINT_COLUMNS = (
     "TULOY ID",
@@ -35,6 +35,11 @@ def parse_date(value, field_name):
         except ValueError:
             pass
     raise ValueError(f"Invalid {field_name} date: {value!r}")
+
+
+def parse_optional_date(value, field_name):
+    value = (value or "").strip()
+    return parse_date(value, field_name) if value else None
 
 
 def read_json_response(response):
@@ -134,13 +139,27 @@ def tesda_payload(row):
     if verified not in ("Matched", "Not Found", "Multiple Match Found"):
         raise ValueError(f"Unexpected verification status: {verified!r}")
     matched = verified == "Matched"
-    if matched and not (row.get("TULOY ID") or "").strip():
-        raise ValueError("Verification says Matched but TULOY ID is empty")
 
     data = None
     if matched:
+        tuloy_id = (row.get("TULOY ID") or "").strip()
+        if not tuloy_id:
+            raise ValueError("Verification says Matched but TULOY ID is empty")
+        if len(tuloy_id) > 50:
+            raise ValueError("TULOY ID exceeds the database limit of 50 characters")
+
         member_id_value = (row.get("MEMBER ID") or "").strip()
-        member_id = int(member_id_value) if member_id_value else None
+        if not member_id_value:
+            raise ValueError("Verification says Matched but MEMBER ID is empty")
+        try:
+            member_id = int(member_id_value)
+        except ValueError as error:
+            raise ValueError("MEMBER ID must be an unsigned integer") from error
+        if not 1 <= member_id <= 4294967295:
+            raise ValueError("MEMBER ID must be between 1 and 4294967295")
+        uli = (row.get("ULI") or "").strip() or None
+        if uli and len(uli) > 50:
+            raise ValueError("ULI exceeds the database limit of 50 characters")
         
         qualification = (row.get("QUALIFICATION") or "").strip()
         start_date = (row.get("START DATE") or "").strip()
@@ -148,27 +167,25 @@ def tesda_payload(row):
         training_status = (row.get("TRAINING STATUS") or "").strip()
         
         has_short_course = bool(qualification or start_date or end_date or training_status)
-        
         short_course_data = None
-        enrollment_status = None
+        short_course_data = None
         
         if has_short_course:
             short_course_data = {
                 "program_name": qualification or None,
-                "start_date": parse_date(start_date, "START DATE"),
-                "end_date": parse_date(end_date, "END DATE"),
+                "start_date": parse_optional_date(start_date, "START DATE"),
+                "end_date": parse_optional_date(end_date, "END DATE"),
                 "training_status": training_status or None,
             }
-            enrollment_status = "ENROLLED"
         
         data = {
-            "id": row["TULOY ID"].strip(),
+            "id": tuloy_id,
             "member_id": member_id,
-            "uli": (row.get("ULI") or "").strip() or None,
+            "uli": uli,
             "mothers_maiden": None,
             "diploma": None,
             "short_course": short_course_data,
-            "enrollment_status": enrollment_status,
+            "enrollment_status": None,
             "date_encoded": None,
             "date_updated": None,
         }
@@ -231,8 +248,8 @@ def main():
     parser.add_argument("--csv", default=DEFAULT_CSV, help="CSV file to process")
     parser.add_argument(
         "--base-url",
-        default=os.getenv("TULOY_API_BASE_URL", "http://127.0.0.1:8000"),
-        help="API root URL (default: http://127.0.0.1:8000)",
+        default=os.getenv("TULOY_API_BASE_URL"),
+        help="API root URL (defaults to TULOY_API_BASE_URL in the project .env)",
     )
     parser.add_argument(
         "--username",
@@ -258,6 +275,12 @@ def main():
     args = parser.parse_args()
 
     try:
+        if not args.base_url:
+            raise RuntimeError(
+                "Set TULOY_API_BASE_URL in the project .env file, "
+                "or pass --base-url."
+            )
+
         fieldnames, rows = load_csv(args.csv)
         if not rows:
             print("CSV contains no data rows.")

@@ -534,10 +534,12 @@ The project includes multi-threaded Python scripts to process a bulk CSV of CHED
 
 `others/import_tesda_csv.py` verifies each TESDA CSV enrollee using `/VerifyMemberBene`, adds the returned `TULOY ID`, `MEMBER ID`, and verification status to the CSV, then submits the enrollee through `/PostEnrolleeMatchedTESDA`. The importer saves progress after each row and skips verification or submission steps already completed, so it can be resumed safely.
 
+Matched records require a TULOY ID and an unsigned MEMBER ID. Short-course start and end dates may be blank; when diploma or short-course data is absent, the corresponding nullable JSON column is stored as `NULL`.
+
 Set `TULOY_API_USERNAME` and `TULOY_API_PASSWORD` to an existing API account, then run:
 
 ```powershell
 python others\import_tesda_csv.py
 ```
 
-The default CSV is `others\TESDA Matching 136.csv` and the default API URL is `http://127.0.0.1:8000`. Override them with `--csv` and `--base-url`. Use `--verify-only` to save verification results without submitting to TESDA, or `--reverify` to refresh existing verification results. Non-matches are also submitted with their verification status; only matched rows create TESDA enrollee records.
+The default CSV is `others\TESDA Matching 136.csv`. The API base URL is loaded from `TULOY_API_BASE_URL` in the project-root `.env` file regardless of the current working directory; override it with `--base-url`. Set `TULOY_API_USERNAME` and `TULOY_API_PASSWORD` in `.env` for authentication. Use `--verify-only` to save verification results without submitting to TESDA, or `--reverify` to refresh existing verification results. Non-matches are also submitted with their verification status; only matched rows create TESDA enrollee records.
