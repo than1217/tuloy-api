@@ -92,8 +92,7 @@ def get_eligible_bene(
             `date_of_birth`,`sex_id`,`member_id`,`listahanan_id`,
             `lrn`,`philsys`,`grade_level`,
             `region_name`,`barangay_name`,`client_status`,`roster_status`, `tuloy_id` 
-            FROM vw_verify_member_bene WHERE `tuloy_id` NOT IN 
-            (SELECT `tuloy_id` FROM enroll_matched_CHED_tbl WHERE `tuloy_id` IS NOT NULL) """ \
+            FROM vw_unmatched_member_bene """ \
             "LIMIT %s OFFSET %s",
             (limit + 1, offset),
         )
