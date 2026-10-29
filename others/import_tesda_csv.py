@@ -25,6 +25,10 @@ CHECKPOINT_COLUMNS = (
 )
 
 
+class RequestTimeout(RuntimeError):
+    pass
+
+
 def parse_date(value, field_name):
     value = (value or "").strip()
     if not value:
@@ -79,6 +83,10 @@ class ApiClient:
             raise RuntimeError(
                 f"POST {path} failed with HTTP {error.code}: {response_body}"
             ) from error
+        except TimeoutError as error:
+            raise RequestTimeout(
+                f"POST {path} timed out after {self.timeout:g} seconds"
+            ) from error
         except URLError as error:
             raise RuntimeError(f"Could not reach {self.base_url}: {error.reason}") from error
 
@@ -112,6 +120,10 @@ class ApiClient:
         try:
             with urlopen(request, timeout=self.timeout) as response:
                 self.access_token = read_json_response(response)["access_token"]
+        except TimeoutError as error:
+            raise RequestTimeout(
+                f"POST /refresh timed out after {self.timeout:g} seconds"
+            ) from error
         except (HTTPError, URLError):
             self.login()
 
@@ -328,6 +340,8 @@ def main():
                     row["IMPORT ERROR"] = ""
                     verify_successes += 1
                     save_csv(args.csv, fieldnames, rows)
+                except RequestTimeout:
+                    raise
                 except (RuntimeError, ValueError, KeyError) as error:
                     row["IMPORT ERROR"] = f"Verification failed: {error}"
                     failures += 1
@@ -348,6 +362,8 @@ def main():
                 row["TESDA POST STATUS"] = "SUCCESS"
                 row["IMPORT ERROR"] = ""
                 post_successes += 1
+            except RequestTimeout:
+                raise
             except (RuntimeError, ValueError, KeyError) as error:
                 row["TESDA POST STATUS"] = "FAILED"
                 row["IMPORT ERROR"] = f"TESDA submission failed: {error}"
