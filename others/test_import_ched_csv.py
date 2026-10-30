@@ -11,11 +11,16 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Set up argument parsing
 parser = argparse.ArgumentParser(description="Test import CHED CSV data via API.")
+parser.add_argument("--host", type=str, default="http://127.0.0.1", help="The API host URL (e.g., http://127.0.0.1 or https://api.example.com)")
+parser.add_argument("--port", type=str, default="8000", help="The API port (if any, e.g., 8000)")
 parser.add_argument("--csv", type=str, required=True, help="Path to the CSV file to import")
 args = parser.parse_args()
 
 CSV_FILE = args.csv
-API_URL = "http://127.0.0.1/PostEnrolleeMatchedCHED"
+BASE_URL = args.host
+if args.port:
+    BASE_URL = f"{args.host}:{args.port}"
+API_URL = f"{BASE_URL}/PostEnrolleeMatchedCHED"
 # Change to the appropriate token once authenticated, or disable auth temporarily if needed for import
 # For the sake of this script, we'll assume we can get a token via the token endpoint
 
@@ -29,26 +34,33 @@ class TokenManager:
         self.login()
 
     def login(self):
-        print("Getting token...")
-        response = requests.post(
-            "http://127.0.0.1/token",
-            data={"username": "admin", "password": "password123"}
-        )
-        if response.status_code == 200:
+        print(f"Getting token from {BASE_URL}/token...")
+        try:
+            response = requests.post(
+                f"{BASE_URL}/token",
+                data={"username": "admin", "password": "password123"}
+            )
+            if response.status_code == 200:
+                data = response.json()
+                self.access_token = data["access_token"]
+                self.refresh_token = data.get("refresh_token")
+                return
+            
+            print("Creating admin user...")
+            requests.post(f"{BASE_URL}/signup", json={"username": "admin", "password": "password123"})
+            response = requests.post(
+                f"{BASE_URL}/token",
+                data={"username": "admin", "password": "password123"}
+            )
             data = response.json()
             self.access_token = data["access_token"]
             self.refresh_token = data.get("refresh_token")
-            return
-        
-        print("Creating admin user...")
-        requests.post("http://127.0.0.1/signup", json={"username": "admin", "password": "password123"})
-        response = requests.post(
-            "http://127.0.0.1/token",
-            data={"username": "admin", "password": "password123"}
-        )
-        data = response.json()
-        self.access_token = data["access_token"]
-        self.refresh_token = data.get("refresh_token")
+        except requests.exceptions.ConnectionError as e:
+            print(f"Error connecting to the API at {BASE_URL}.")
+            print("Please ensure the API is running, or specify the correct host and port using --host and --port.")
+            print(f"Details: {e}")
+            import sys
+            sys.exit(1)
 
     def get_access_token(self):
         with self.lock:
@@ -61,7 +73,7 @@ class TokenManager:
                 return
             
             response = requests.post(
-                "http://127.0.0.1/refresh",
+                f"{BASE_URL}/refresh",
                 json={"refresh_token": self.refresh_token}
             )
             if response.status_code == 200:

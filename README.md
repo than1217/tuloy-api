@@ -525,18 +525,15 @@ Authorization: ******
 
 ## Bulk Data Import (CHED Matches)
 
-The project includes multi-threaded Python scripts to process a bulk CSV of CHED matching results and automatically POST them into the API.
+`others\import_ched_csv.py` submits CHED matching results from a CSV to the API in chunks of 10,000 rows, using up to five workers.
 
-1. Ensure the API is running locally (uvicorn main:app).
-2. In a separate terminal, run the test script (samples 10 rows) or the full import script:
+1. Ensure the API is running.
+2. Set `TULOY_API_BASE_URL`, `TULOY_API_USERNAME`, and `TULOY_API_PASSWORD` in the project-root `.env` file, then run:
    `ash
-   # Test with 10 rows
-   .\venv\Scripts\python.exe others\test_import_ched_csv.py
-   
-   # Run the full import script (reads chunks of 10,000 rows, 5 parallel workers)
-   .\venv\Scripts\python.exe others\import_ched_csv.py
+   .\venv\Scripts\python.exe others\import_ched_csv.py --csv "others\CHED-Matching.csv"
    `
-   *(Note: The scripts will automatically sign up / log in as dmin to fetch a JWT token for the API requests, and will dynamically resolve the CHED-Matching.csv location).*
+
+Use `--base-url`, `--username`, and `--password` to override the corresponding environment values. The importer does not create API accounts.
 
 ## TESDA CSV Import
 

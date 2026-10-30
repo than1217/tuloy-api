@@ -1,111 +1,148 @@
-import csv
-import json
-import requests
-import os
 import argparse
 import concurrent.futures
-from urllib.error import URLError
-
-# Get the absolute path to the parent directory where the CSV is located
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# Set up argument parsing
-parser = argparse.ArgumentParser(description="Import CHED CSV data via API.")
-parser.add_argument("--host", type=str, default="http://127.0.0.1", help="The API host URL (e.g., http://127.0.0.1 or https://api.example.com)")
-parser.add_argument("--port", type=str, default="", help="The API port (if any, e.g., 8000)")
-parser.add_argument("--csv", type=str, required=True, help="Path to the CSV file to import")
-args = parser.parse_args()
-
-CSV_FILE = args.csv
-
-# Construct the base URL
-BASE_URL = args.host
-if args.port:
-    BASE_URL = f"{args.host}:{args.port}"
-
-API_URL = f"{BASE_URL}/PostEnrolleeMatchedCHED"
-
+import csv
+import json
+import os
+import sys
 import threading
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
-class TokenManager:
-    def __init__(self):
+from dotenv import load_dotenv
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
+load_dotenv(dotenv_path=os.path.join(PROJECT_DIR, ".env"), override=True)
+
+
+class ApiRequestError(RuntimeError):
+    pass
+
+
+def read_json_response(response):
+    return json.loads(response.read().decode("utf-8"))
+
+
+class ApiClient:
+    def __init__(self, base_url, username, password, timeout):
+        self.base_url = base_url.rstrip("/")
+        self.username = username
+        self.password = password
+        self.timeout = timeout
         self.access_token = None
         self.refresh_token = None
-        self.lock = threading.Lock()
-        self.login()
+        self.auth_lock = threading.Lock()
+
+    def _request(self, path, body, content_type, authenticated=True, retry_auth=True):
+        headers = {"Content-Type": content_type}
+        request_token = None
+        if authenticated:
+            with self.auth_lock:
+                if not self.access_token:
+                    self.login()
+                request_token = self.access_token
+            headers["Authorization"] = f"Bearer {request_token}"
+
+        request = Request(
+            f"{self.base_url}/{path.lstrip('/')}",
+            data=body,
+            headers=headers,
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=self.timeout) as response:
+                return read_json_response(response)
+        except HTTPError as error:
+            response_body = error.read().decode("utf-8", errors="replace")
+            if authenticated and error.code == 401 and retry_auth:
+                with self.auth_lock:
+                    if self.access_token == request_token:
+                        self.refresh()
+                return self._request(path, body, content_type, retry_auth=False)
+            raise ApiRequestError(
+                f"POST {path} failed with HTTP {error.code}: {response_body}"
+            ) from error
+        except TimeoutError as error:
+            raise RuntimeError(
+                f"POST {path} timed out after {self.timeout:g} seconds"
+            ) from error
+        except URLError as error:
+            raise RuntimeError(
+                f"Could not reach {self.base_url}: {error.reason}"
+            ) from error
 
     def login(self):
-        print(f"Getting token from {BASE_URL}/token...")
-        response = requests.post(
-            f"{BASE_URL}/token",
-            data={"username": "admin", "password": "password123"}
+        if not self.username or not self.password:
+            raise RuntimeError(
+                "Set TULOY_API_USERNAME and TULOY_API_PASSWORD, "
+                "or pass --username and --password."
+            )
+        response = self._request(
+            "/token",
+            urlencode(
+                {"username": self.username, "password": self.password}
+            ).encode("utf-8"),
+            "application/x-www-form-urlencoded",
+            authenticated=False,
         )
-        if response.status_code == 200:
-            data = response.json()
-            self.access_token = data["access_token"]
-            self.refresh_token = data.get("refresh_token")
-            return
-        
-        print("Creating admin user...")
-        requests.post(f"{BASE_URL}/signup", json={"username": "admin", "password": "password123"})
-        response = requests.post(
-            f"{BASE_URL}/token",
-            data={"username": "admin", "password": "password123"}
-        )
-        data = response.json()
-        self.access_token = data["access_token"]
-        self.refresh_token = data.get("refresh_token")
-
-    def get_access_token(self):
-        with self.lock:
-            return self.access_token
+        self.access_token = response["access_token"]
+        self.refresh_token = response.get("refresh_token")
 
     def refresh(self):
-        with self.lock:
-            if not self.refresh_token:
-                self.login()
-                return
-            
-            response = requests.post(
-                f"{BASE_URL}/refresh",
-                json={"refresh_token": self.refresh_token}
-            )
-            if response.status_code == 200:
-                self.access_token = response.json()["access_token"]
-            else:
-                self.login()
+        if not self.refresh_token:
+            self.login()
+            return
 
-def process_row(row, token_mgr):
-    access_token = token_mgr.get_access_token()
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json"
-    }
+        request = Request(
+            f"{self.base_url}/refresh",
+            data=json.dumps({"refresh_token": self.refresh_token}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=self.timeout) as response:
+                token_data = read_json_response(response)
+                self.access_token = token_data["access_token"]
+                self.refresh_token = token_data.get("refresh_token", self.refresh_token)
+        except TimeoutError as error:
+            raise RuntimeError(
+                f"POST /refresh timed out after {self.timeout:g} seconds"
+            ) from error
+        except (HTTPError, URLError):
+            self.login()
 
-    match_result = row.get("Matching Result Concat", "").strip().upper()
-    is_match = (match_result == "MATCH")
-    
-    # Some cleaning and type casting
+    def post_json(self, path, payload):
+        return self._request(
+            path,
+            json.dumps(payload).encode("utf-8"),
+            "application/json",
+        )
+
+
+def process_row(row, client):
+    match_result = (row.get("Matching Result Concat") or "").strip().upper()
+    is_match = match_result == "MATCH"
+
     try:
         member_id = int(row.get("Entry_id", 0))
-    except ValueError:
+    except (TypeError, ValueError):
         member_id = 0
-        
+
     try:
         year_level = int(row.get("Year level", 0))
-    except ValueError:
+    except (TypeError, ValueError):
         year_level = 0
-        
-    tuloy_id = row.get("dswd_member_id", "").strip()
 
+    tuloy_id = (row.get("dswd_member_id") or "").strip()
     payload = {
         "status": is_match,
         "message": "FOUND" if is_match else "NOT FOUND",
-        "enrollment_id": 0,  # We don't have this in CSV, default to 0
+        "enrollment_id": 0,
         "data": {
             "id": tuloy_id,
             "member_id": member_id,
-            "student_id": 0, # Not explicitly available in CSV
+            "student_id": 0,
             "mothers_maiden": None,
             "degree": {
                 "program_name": row.get("Degree Program", ""),
@@ -113,80 +150,110 @@ def process_row(row, token_mgr):
                 "program_duration": None,
                 "academic_year": row.get("Academic Year", ""),
                 "year_level": year_level if year_level > 0 else None,
-                "semester": 1
+                "semester": 1,
             },
             "enrollment_status": "ENROLLED",
             "date_encoded": None,
-            "date_updated": None
+            "date_updated": None,
         } if is_match else None,
-        "error_code": None
+        "error_code": None,
     }
 
-    resp = requests.post(API_URL, json=payload, headers=headers)
-    if resp.status_code == 401:
-        token_mgr.refresh()
-        headers["Authorization"] = f"Bearer {token_mgr.get_access_token()}"
-        resp = requests.post(API_URL, json=payload, headers=headers)
+    try:
+        client.post_json("/PostEnrolleeMatchedCHED", payload)
+    except ApiRequestError as error:
+        print(f"Failed to insert row {tuloy_id}: {error}")
+        return False
+    return True
 
-    if resp.status_code != 200:
-        print(f"Failed to insert row {tuloy_id}: {resp.status_code} - {resp.text}")
-    return resp.status_code == 200
 
-def process_chunk(chunk, token_mgr, chunk_index):
+def process_chunk(chunk, client, chunk_index):
     success_count = 0
     print(f"[Chunk {chunk_index}] Starting chunk of {len(chunk)} rows...")
-    
-    for i, row in enumerate(chunk):
-        if process_row(row, token_mgr):
+
+    for index, row in enumerate(chunk):
+        if process_row(row, client):
             success_count += 1
-            
-        if (i + 1) % 1000 == 0:
-            print(f"[Chunk {chunk_index}] Progress: {i + 1} / {len(chunk)} processed")
-            
+
+        if (index + 1) % 1000 == 0:
+            print(f"[Chunk {chunk_index}] Progress: {index + 1} / {len(chunk)} processed")
+
     print(f"[Chunk {chunk_index}] Completed. Success: {success_count} / {len(chunk)}")
     return success_count
 
-def main():
-    if not os.path.exists(CSV_FILE):
-        print(f"CSV file {CSV_FILE} not found.")
-        return
-        
-    token_mgr = TokenManager()
-    print("Token obtained. Starting import...")
 
-    chunks = []
-    current_chunk = []
-    
-    with open(CSV_FILE, "r", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            current_chunk.append(row)
-            if len(current_chunk) == 10000:
-                chunks.append(current_chunk)
-                current_chunk = []
-                
-    if current_chunk:
-        chunks.append(current_chunk)
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Import CHED CSV data via API.")
+    parser.add_argument("--csv", required=True, help="Path to the CSV file to import")
+    parser.add_argument(
+        "--base-url",
+        default=os.getenv("TULOY_API_BASE_URL"),
+        help="API root URL (defaults to TULOY_API_BASE_URL in the project .env)",
+    )
+    parser.add_argument(
+        "--username",
+        default=os.getenv("TULOY_API_USERNAME"),
+        help="API username (or set TULOY_API_USERNAME)",
+    )
+    parser.add_argument(
+        "--password",
+        default=os.getenv("TULOY_API_PASSWORD"),
+        help="API password (or set TULOY_API_PASSWORD)",
+    )
+    parser.add_argument("--timeout", type=float, default=30, help="Request timeout in seconds")
+    args = parser.parse_args(argv)
 
-    total_rows = sum(len(c) for c in chunks)
-    print(f"Loaded {total_rows} rows into {len(chunks)} chunks of up to 10,000 rows. Processing with 5 workers...")
+    try:
+        if not args.base_url:
+            raise RuntimeError(
+                "Set TULOY_API_BASE_URL in the project .env file, "
+                "or pass --base-url."
+            )
+        if args.timeout <= 0:
+            raise ValueError("--timeout must be greater than zero")
+        if not os.path.exists(args.csv):
+            raise FileNotFoundError(f"CSV file {args.csv} not found.")
 
-    total_success = 0
-    
-    # Process using a ThreadPoolExecutor with 5 workers (parallel of 5)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-        # submit all chunks
-        futures = {executor.submit(process_chunk, chunk, token_mgr, idx): idx for idx, chunk in enumerate(chunks, 1)}
-        
-        for future in concurrent.futures.as_completed(futures):
-            try:
-                successes = future.result()
-                total_success += successes
-            except Exception as e:
-                idx = futures[future]
-                print(f"[Chunk {idx}] Failed with exception: {e}")
+        client = ApiClient(args.base_url, args.username, args.password, args.timeout)
+        chunks = []
+        current_chunk = []
+        with open(args.csv, "r", encoding="utf-8-sig", newline="") as source:
+            for row in csv.DictReader(source):
+                current_chunk.append(row)
+                if len(current_chunk) == 10000:
+                    chunks.append(current_chunk)
+                    current_chunk = []
+        if current_chunk:
+            chunks.append(current_chunk)
 
-    print(f"Done! Successfully imported {total_success} out of {total_rows} rows.")
+        total_rows = sum(len(chunk) for chunk in chunks)
+        if not total_rows:
+            print("CSV contains no data rows.")
+            return 0
+
+        print(
+            f"Loaded {total_rows} rows into {len(chunks)} chunks of up to "
+            "10,000 rows. Processing with 5 workers..."
+        )
+        total_success = 0
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            futures = {
+                executor.submit(process_chunk, chunk, client, index): index
+                for index, chunk in enumerate(chunks, 1)
+            }
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    total_success += future.result()
+                except (RuntimeError, ValueError, KeyError) as error:
+                    index = futures[future]
+                    print(f"[Chunk {index}] Failed with exception: {error}")
+
+        print(f"Done! Successfully imported {total_success} out of {total_rows} rows.")
+        return 0 if total_success == total_rows else 1
+    except (OSError, ValueError, RuntimeError) as error:
+        print(f"Import aborted: {error}", file=sys.stderr)
+        return 1
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
