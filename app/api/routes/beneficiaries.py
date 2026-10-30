@@ -367,23 +367,18 @@ def get_matched_tesda_records(
     cursor = db.cursor(dictionary=True)
     try:
         cursor.execute(
-            "SELECT * FROM enroll_matched_TESDA_tbl LIMIT %s OFFSET %s",
+            "SELECT * FROM vw_get_matched_TESDA LIMIT %s OFFSET %s",
             (limit + 1, offset),
         )
         rows = cursor.fetchall()
         has_more = len(rows) > limit
         
-        # Parse JSON fields before returning to avoid stringified JSON in output
+        # Parse JSON fields (now coming from enrollment_details in the view)
         import json
         for row in rows:
-            if row.get('diploma') and isinstance(row['diploma'], str):
+            if row.get('enrollment_details') and isinstance(row['enrollment_details'], str):
                 try:
-                    row['diploma'] = json.loads(row['diploma'])
-                except json.JSONDecodeError:
-                    pass
-            if row.get('short_course') and isinstance(row['short_course'], str):
-                try:
-                    row['short_course'] = json.loads(row['short_course'])
+                    row['enrollment_details'] = json.loads(row['enrollment_details'])
                 except json.JSONDecodeError:
                     pass
 
@@ -417,80 +412,15 @@ def get_validated_enrollees(
     """
     cursor = db.cursor(dictionary=True)
     
-    # We fetch limit + 1 to check if there are more records
-    base_query = """
-        SELECT 
-            'CHED' AS agency_name,
-            tuloy_id,
-            member_id,
-            student_id,
-            mm_first_name,
-            mm_middle_name,
-            mm_last_name,
-            degree_program_name,
-            degree_date_enrolled,
-            degree_program_duration,
-            degree_academic_year,
-            degree_year_level,
-            degree_semester,
-            enrollment_status,
-            date_encoded,
-            date_updated,
-            NULL AS uli_id,
-            NULL AS diploma,
-            NULL AS short_course,
-            created_at,
-            updated_at
-        FROM enroll_matched_CHED_tbl
-        
-        UNION ALL
-        
-        SELECT 
-            'TESDA' AS agency_name,
-            tuloy_id,
-            member_id,
-            NULL AS student_id,
-            mm_first_name,
-            mm_middle_name,
-            mm_last_name,
-            NULL AS degree_program_name,
-            NULL AS degree_date_enrolled,
-            NULL AS degree_program_duration,
-            NULL AS degree_academic_year,
-            NULL AS degree_year_level,
-            NULL AS degree_semester,
-            NULL AS enrollment_status,
-            NULL AS date_encoded,
-            NULL AS date_updated,
-            uli_id,
-            diploma,
-            short_course,
-            created_at,
-            updated_at
-        FROM enroll_matched_TESDA_tbl
-    """
-    
     if agency:
-        # User specified an agency, so we filter the UNION output
-        # It's safest to wrap the UNION in a derived table and filter on it
         agency = agency.upper()
         if agency not in ["CHED", "TESDA"]:
             raise HTTPException(status_code=400, detail="Agency must be either CHED or TESDA")
             
-        query = f"""
-            SELECT * FROM ({base_query}) AS all_agencies 
-            WHERE agency_name = %s
-            ORDER BY created_at DESC
-            LIMIT %s OFFSET %s
-        """
+        query = "SELECT * FROM vw_unified_matched_enrollment WHERE agency_name = %s LIMIT %s OFFSET %s"
         params = (agency, limit + 1, offset)
     else:
-        # No agency specified, just return all
-        query = f"""
-            SELECT * FROM ({base_query}) AS all_agencies
-            ORDER BY created_at DESC
-            LIMIT %s OFFSET %s
-        """
+        query = "SELECT * FROM vw_unified_matched_enrollment LIMIT %s OFFSET %s"
         params = (limit + 1, offset)
     
     try:
@@ -498,52 +428,17 @@ def get_validated_enrollees(
         rows = cursor.fetchall()
         
         has_more = len(rows) > limit
-        # slice off the extra row used for checking if has_more
         actual_rows = rows[:limit]
         
         response_data = []
         for row in actual_rows:
-            agency = row['agency_name']
-            details = {}
-            if agency == 'CHED':
-                details = {
-                    "student_id": row['student_id'],
-                    "mm_first_name": row['mm_first_name'],
-                    "mm_middle_name": row['mm_middle_name'],
-                    "mm_last_name": row['mm_last_name'],
-                    "degree_program_name": row['degree_program_name'],
-                    "degree_date_enrolled": str(row['degree_date_enrolled']) if row['degree_date_enrolled'] else None,
-                    "degree_program_duration": row['degree_program_duration'],
-                    "degree_academic_year": row['degree_academic_year'],
-                    "degree_year_level": row['degree_year_level'],
-                    "degree_semester": row['degree_semester'],
-                    "enrollment_status": row['enrollment_status'],
-                    "date_encoded": str(row['date_encoded']) if row['date_encoded'] else None,
-                    "date_updated": str(row['date_updated']) if row['date_updated'] else None,
-                }
-            else:
-                diploma_data = row['diploma']
-                if isinstance(diploma_data, str):
-                    try:
-                        diploma_data = json.loads(diploma_data)
-                    except:
-                        diploma_data = None
-                        
-                short_course_data = row['short_course']
-                if isinstance(short_course_data, str):
-                    try:
-                        short_course_data = json.loads(short_course_data)
-                    except:
-                        short_course_data = None
-                        
-                details = {
-                    "uli_id": row['uli_id'],
-                    "mm_first_name": row['mm_first_name'],
-                    "mm_middle_name": row['mm_middle_name'],
-                    "mm_last_name": row['mm_last_name'],
-                    "diploma": diploma_data,
-                    "short_course": short_course_data
-                }
+            details = row.get('enrollment_details')
+            if isinstance(details, str):
+                import json
+                try:
+                    details = json.loads(details)
+                except json.JSONDecodeError:
+                    pass
                 
             # Filter out None values to keep the JSON clean
             details = {k: v for k, v in details.items() if v is not None}
