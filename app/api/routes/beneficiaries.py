@@ -444,7 +444,7 @@ def get_validated_enrollees(
             details = {k: v for k, v in details.items() if v is not None}
             
             response_data.append({
-                "agency_name": agency,
+                "agency_name": row['agency_name'],
                 "tuloy_id": row['tuloy_id'],
                 "member_id": row['member_id'],
                 "enrollment_details": details,
