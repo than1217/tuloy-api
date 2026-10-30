@@ -5,6 +5,7 @@ import json
 import os
 import sys
 import threading
+from datetime import datetime
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -14,6 +15,13 @@ from dotenv import load_dotenv
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
 load_dotenv(dotenv_path=os.path.join(PROJECT_DIR, ".env"), override=True)
+
+REQUIRED_CSV_COLUMNS = {
+    "Degree Program",
+    "Year level",
+    "Academic Year",
+}
+VERIFY_STATUS_VALUES = {"Matched", "Not Found", "Multiple Match Found"}
 
 
 class ApiRequestError(RuntimeError):
@@ -120,27 +128,54 @@ class ApiClient:
         )
 
 
-def process_row(row, client):
-    match_result = (row.get("Matching Result Concat") or "").strip().upper()
-    is_match = match_result == "MATCH"
+def verify_payload(row):
+    first_name = (row.get("First name") or row.get("MEMBER First name") or "").strip()
+    last_name = (row.get("Last name") or row.get("MEMBER Last name") or "").strip()
+    birthdate = (row.get("Birthdate") or row.get("Birthday") or "").strip()
+    if not first_name or not last_name or not birthdate:
+        raise ValueError("First name, Last name, and Birthdate are required")
 
-    try:
-        member_id = int(row.get("Entry_id", 0))
-    except (TypeError, ValueError):
-        member_id = 0
+    for date_format in ("%Y-%m-%d", "%m/%d/%Y", "%Y-%m-%d %H:%M:%S"):
+        try:
+            birthdate = datetime.strptime(birthdate, date_format).date().isoformat()
+            break
+        except ValueError:
+            continue
+    else:
+        raise ValueError(f"Invalid Birthdate: {birthdate!r}")
+
+    return {
+        "first_name": first_name,
+        "last_name": last_name,
+        "date_of_birth": birthdate,
+    }
+
+
+def ched_payload(row, verification):
+    status = verification.get("status")
+    if status not in VERIFY_STATUS_VALUES:
+        raise ValueError(f"Unexpected verification response: {verification!r}")
+    is_match = status == "Matched"
 
     try:
         year_level = int(row.get("Year level", 0))
     except (TypeError, ValueError):
         year_level = 0
 
-    tuloy_id = (row.get("dswd_member_id") or "").strip()
-    payload = {
-        "status": is_match,
-        "message": "FOUND" if is_match else "NOT FOUND",
-        "enrollment_id": 0,
-        "data": {
-            "id": tuloy_id,
+    data = None
+    if is_match:
+        tuloy_id = verification.get("tuloy_id")
+        if not tuloy_id or len(str(tuloy_id)) > 50:
+            raise ValueError("Verification returned an invalid TULOY ID")
+        try:
+            member_id = int(verification["member_id"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise ValueError("Verification returned an invalid MEMBER ID") from error
+        if not 1 <= member_id <= 4294967295:
+            raise ValueError("Verification returned an invalid MEMBER ID")
+
+        data = {
+            "id": str(tuloy_id),
             "member_id": member_id,
             "student_id": 0,
             "mothers_maiden": None,
@@ -155,14 +190,25 @@ def process_row(row, client):
             "enrollment_status": "ENROLLED",
             "date_encoded": None,
             "date_updated": None,
-        } if is_match else None,
+        }
+
+    return {
+        "status": is_match,
+        "message": "FOUND" if is_match else status.upper(),
+        "enrollment_id": 0,
+        "data": data,
         "error_code": None,
     }
 
+
+def process_row(row, client):
+    row_id = row.get("id", "?")
     try:
+        verification = client.post_json("/VerifyMemberBene", verify_payload(row))
+        payload = ched_payload(row, verification)
         client.post_json("/PostEnrolleeMatchedCHED", payload)
-    except ApiRequestError as error:
-        print(f"Failed to insert row {tuloy_id}: {error}")
+    except (ApiRequestError, ValueError, KeyError) as error:
+        print(f"Failed to process CSV row {row_id}: {error}")
         return False
     return True
 
@@ -214,11 +260,32 @@ def main(argv=None):
         if not os.path.exists(args.csv):
             raise FileNotFoundError(f"CSV file {args.csv} not found.")
 
-        client = ApiClient(args.base_url, args.username, args.password, args.timeout)
         chunks = []
         current_chunk = []
         with open(args.csv, "r", encoding="utf-8-sig", newline="") as source:
-            for row in csv.DictReader(source):
+            reader = csv.DictReader(source)
+            if not reader.fieldnames:
+                raise ValueError("CSV file is empty or has no header row.")
+            missing_columns = sorted(REQUIRED_CSV_COLUMNS - set(reader.fieldnames))
+            if missing_columns:
+                raise ValueError(
+                    "CSV is missing required columns: "
+                    f"{', '.join(missing_columns)}."
+                )
+            header = set(reader.fieldnames)
+            has_raw_names = {"First name", "Last name", "Birthdate"} <= header
+            has_enriched_names = {
+                "MEMBER First name",
+                "MEMBER Last name",
+                "Birthday",
+            } <= header
+            if not has_raw_names and not has_enriched_names:
+                raise ValueError(
+                    "CSV must include First name, Last name, and Birthdate "
+                    "(or the corresponding MEMBER First name, MEMBER Last name, "
+                    "and Birthday columns)."
+                )
+            for row in reader:
                 current_chunk.append(row)
                 if len(current_chunk) == 10000:
                     chunks.append(current_chunk)
@@ -231,6 +298,7 @@ def main(argv=None):
             print("CSV contains no data rows.")
             return 0
 
+        client = ApiClient(args.base_url, args.username, args.password, args.timeout)
         print(
             f"Loaded {total_rows} rows into {len(chunks)} chunks of up to "
             "10,000 rows. Processing with 5 workers..."

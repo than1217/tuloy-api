@@ -525,12 +525,12 @@ Authorization: ******
 
 ## Bulk Data Import (CHED Matches)
 
-`others\import_ched_csv.py` submits CHED matching results from a CSV to the API in chunks of 10,000 rows, using up to five workers.
+`others\import_ched_csv.py` checks each CHED grantee against `/VerifyMemberBene` using only first name, last name, and birthdate, then submits the verification result and CHED enrollment data through `/PostEnrolleeMatchedCHED`. Rows are processed in chunks of 10,000, using up to five workers.
 
 1. Ensure the API is running.
 2. Set `TULOY_API_BASE_URL`, `TULOY_API_USERNAME`, and `TULOY_API_PASSWORD` in the project-root `.env` file, then run:
    `ash
-   .\venv\Scripts\python.exe others\import_ched_csv.py --csv "others\CHED-Matching.csv"
+   .\venv\Scripts\python.exe others\import_ched_csv.py --csv "others\CHED TES Grantee.csv"
    `
 
 Use `--base-url`, `--username`, and `--password` to override the corresponding environment values. The importer does not create API accounts.
