@@ -1,14 +1,17 @@
-import argparse
+﻿import argparse
 import csv
 import json
 import os
 import sys
 import tempfile
 import time
+import threading
+import concurrent.futures
 from datetime import datetime
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+
 from dotenv import load_dotenv
 from tqdm import tqdm
 
@@ -24,10 +27,11 @@ CHECKPOINT_COLUMNS = (
     "IMPORT ERROR",
 )
 
-
 class RequestTimeout(RuntimeError):
     pass
 
+class ApiRequestError(RuntimeError):
+    pass
 
 def parse_date(value, field_name):
     value = (value or "").strip()
@@ -40,15 +44,12 @@ def parse_date(value, field_name):
             pass
     raise ValueError(f"Invalid {field_name} date: {value!r}")
 
-
 def parse_optional_date(value, field_name):
     value = (value or "").strip()
     return parse_date(value, field_name) if value else None
 
-
 def read_json_response(response):
     return json.loads(response.read().decode("utf-8"))
-
 
 class ApiClient:
     def __init__(self, base_url, username, password, timeout):
@@ -58,13 +59,18 @@ class ApiClient:
         self.timeout = timeout
         self.access_token = None
         self.refresh_token = None
+        self.auth_lock = threading.Lock()
 
     def _request(self, path, body, content_type, authenticated=True, retry_auth=True):
         headers = {"Content-Type": content_type}
+        request_token = None
         if authenticated:
-            if not self.access_token:
-                self.login()
-            headers["Authorization"] = f"Bearer {self.access_token}"
+            with self.auth_lock:
+                if not self.access_token:
+                    self.login()
+                request_token = self.access_token
+            # Note: Changed to standard Bearer token scheme
+            headers["Authorization"] = f"Bearer {request_token}"
 
         request = Request(
             f"{self.base_url}/{path.lstrip('/')}",
@@ -78,9 +84,11 @@ class ApiClient:
         except HTTPError as error:
             response_body = error.read().decode("utf-8", errors="replace")
             if authenticated and error.code == 401 and retry_auth:
-                self.refresh()
+                with self.auth_lock:
+                    if self.access_token == request_token:
+                        self.refresh()
                 return self._request(path, body, content_type, retry_auth=False)
-            raise RuntimeError(
+            raise ApiRequestError(
                 f"POST {path} failed with HTTP {error.code}: {response_body}"
             ) from error
         except TimeoutError as error:
@@ -88,7 +96,9 @@ class ApiClient:
                 f"POST {path} timed out after {self.timeout:g} seconds"
             ) from error
         except URLError as error:
-            raise RuntimeError(f"Could not reach {self.base_url}: {error.reason}") from error
+            raise RuntimeError(
+                f"Could not reach {self.base_url}: {error.reason}"
+            ) from error
 
     def login(self):
         if not self.username or not self.password:
@@ -111,6 +121,7 @@ class ApiClient:
         if not self.refresh_token:
             self.login()
             return
+
         request = Request(
             f"{self.base_url}/refresh",
             data=json.dumps({"refresh_token": self.refresh_token}).encode("utf-8"),
@@ -119,7 +130,9 @@ class ApiClient:
         )
         try:
             with urlopen(request, timeout=self.timeout) as response:
-                self.access_token = read_json_response(response)["access_token"]
+                token_data = read_json_response(response)
+                self.access_token = token_data["access_token"]
+                self.refresh_token = token_data.get("refresh_token", self.refresh_token)
         except TimeoutError as error:
             raise RequestTimeout(
                 f"POST /refresh timed out after {self.timeout:g} seconds"
@@ -134,7 +147,6 @@ class ApiClient:
             "application/json",
         )
 
-
 def verify_payload(row):
     payload = {
         "first_name": (row.get("FIRST NAME") or "").strip(),
@@ -144,7 +156,6 @@ def verify_payload(row):
     if not payload["first_name"] or not payload["last_name"]:
         raise ValueError("FIRST NAME and LAST NAME are required")
     return payload
-
 
 def tesda_payload(row):
     verified = (row.get("VERIFY STATUS") or "").strip()
@@ -180,7 +191,6 @@ def tesda_payload(row):
         
         has_short_course = bool(qualification or start_date or end_date or training_status)
         short_course_data = None
-        short_course_data = None
         
         if has_short_course:
             short_course_data = {
@@ -211,64 +221,87 @@ def tesda_payload(row):
         "enrollment_id": 0,
     }
 
-
-def save_csv(path, fieldnames, rows):
-    directory = os.path.dirname(os.path.abspath(path))
-    temporary_path = None
+def process_row_task(row, client, args):
+    v_succ, p_succ, fail = 0, 0, 0
     try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8-sig",
-            newline="",
-            dir=directory,
-            delete=False,
-        ) as output:
-            temporary_path = output.name
-            writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
-            writer.writeheader()
-            writer.writerows(rows)
-        for attempt in range(5):
+        # Verification Step
+        if args.reverify or not (row.get("VERIFY STATUS") or "").strip():
+            if args.reverify:
+                row["VERIFY STATUS"] = ""
+                row["TULOY ID"] = ""
+                row["MEMBER ID"] = ""
+                row["TESDA POST STATUS"] = ""
             try:
-                os.replace(temporary_path, path)
-                break
-            except PermissionError as error:
-                if attempt < 4:
-                    time.sleep(0.25 * (2**attempt))
-                    continue
-                winerror = getattr(error, "winerror", None)
-                windows_error = f" Windows error {winerror}." if winerror else ""
-                raise RuntimeError(
-                    f"Cannot update CSV checkpoint '{path}' after several attempts."
-                    f"{windows_error} A process may be temporarily preventing the "
-                    "file from being replaced; close any preview/editor and pause "
-                    "file-sync or antivirus scanning, then rerun the importer."
-                ) from error
-    finally:
-        if temporary_path and os.path.exists(temporary_path):
-            os.remove(temporary_path)
+                result = client.post_json("/VerifyMemberBene", verify_payload(row))
+                status = result.get("status")
+                if status not in ("Matched", "Not Found", "Multiple Match Found"):
+                    raise RuntimeError(f"Unexpected verification response: {result!r}")
+                if status == "Matched" and (
+                    result.get("tuloy_id") is None or result.get("member_id") is None
+                ):
+                    raise RuntimeError("Verification returned Matched without both IDs")
+                row["VERIFY STATUS"] = status
+                tuloy_id = result.get("tuloy_id")
+                member_id = result.get("member_id")
+                row["TULOY ID"] = "" if tuloy_id is None else str(tuloy_id)
+                row["MEMBER ID"] = "" if member_id is None else str(member_id)
+                row["IMPORT ERROR"] = ""
+                v_succ = 1
+            except (ApiRequestError, RequestTimeout, RuntimeError, ValueError, KeyError) as error:
+                row["IMPORT ERROR"] = f"Verification failed: {error}"
+                fail = 1
+                return v_succ, p_succ, fail
 
+        # Posting Step
+        if args.verify_only:
+            return v_succ, p_succ, fail
+        if (row.get("TESDA POST STATUS") or "").strip() == "SUCCESS":
+            return v_succ, p_succ, fail
+        if not (row.get("VERIFY STATUS") or "").strip():
+            return v_succ, p_succ, fail
 
-def load_csv(path):
-    with open(path, "r", encoding="utf-8-sig", newline="") as source:
-        reader = csv.DictReader(source)
-        if not reader.fieldnames:
-            raise ValueError("CSV file is empty or has no header row")
-        missing = [
-            column
-            for column in ("FIRST NAME", "LAST NAME", "BIRTHDATE")
-            if column not in reader.fieldnames
-        ]
-        if missing:
-            raise ValueError(f"CSV is missing required columns: {', '.join(missing)}")
-        fieldnames = list(reader.fieldnames)
-        for column in CHECKPOINT_COLUMNS:
-            if column not in fieldnames:
-                fieldnames.append(column)
-        rows = list(reader)
-    return fieldnames, rows
+        try:
+            payload = tesda_payload(row)
+            client.post_json("/PostEnrolleeMatchedTESDA", payload)
+            row["TESDA POST STATUS"] = "SUCCESS"
+            row["IMPORT ERROR"] = ""
+            p_succ = 1
+        except (ApiRequestError, RequestTimeout, RuntimeError, ValueError, KeyError) as error:
+            row["TESDA POST STATUS"] = "FAILED"
+            row["IMPORT ERROR"] = f"TESDA submission failed: {error}"
+            fail = 1
 
+    except Exception as e:
+        row["IMPORT ERROR"] = f"Unexpected error: {e}"
+        fail = 1
 
-def main():
+    return v_succ, p_succ, fail
+
+def _process_and_write_chunk(chunk, client, args, writer, target_file, pbar, stats):
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        futures = [executor.submit(process_row_task, r, client, args) for r in chunk]
+        
+        for future in concurrent.futures.as_completed(futures):
+            v_succ, p_succ, fail = future.result()
+            stats["verify_successes"] += v_succ
+            stats["post_successes"] += p_succ
+            stats["failures"] += fail
+            
+            pbar.set_postfix({
+                "Verified": stats["verify_successes"], 
+                "Posted": stats["post_successes"], 
+                "Errors": stats["failures"]
+            })
+            pbar.update(1)
+            
+    # Rows were modified in-place concurrently; write them in original sequential order
+    for row in chunk:
+        writer.writerow(row)
+
+    target_file.flush()
+    os.fsync(target_file.fileno())
+
+def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Verify TESDA CSV records and submit them through the Tuloy API."
     )
@@ -299,7 +332,7 @@ def main():
         action="store_true",
         help="Re-run verification even when the CSV already has a VERIFY STATUS",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     try:
         if not args.base_url:
@@ -307,98 +340,110 @@ def main():
                 "Set TULOY_API_BASE_URL in the project .env file, "
                 "or pass --base-url."
             )
+        if args.timeout <= 0:
+            raise ValueError("--timeout must be greater than zero")
 
-        fieldnames, rows = load_csv(args.csv)
-        if not rows:
+        if not os.path.exists(args.csv):
+            print(f"CSV file {args.csv} not found.")
+            return 1
+
+        # 1. Count total rows in the source CSV (fast pass)
+        with open(args.csv, "r", encoding="utf-8-sig") as f:
+            total_rows = sum(1 for _ in f) - 1 # Subtract header
+            
+        if total_rows <= 0:
             print("CSV contains no data rows.")
             return 0
 
+        # 2. Check for temporary progress file
+        temp_csv = args.csv + ".tmp"
+        processed_count = 0
+        if os.path.exists(temp_csv):
+            with open(temp_csv, "r", encoding="utf-8-sig") as f:
+                processed_count = sum(1 for _ in f) - 1
+            if processed_count < 0:
+                processed_count = 0
+                
+        if processed_count >= total_rows:
+            print("All rows already processed. Finalizing file replacement...")
+            os.replace(temp_csv, args.csv)
+            return 0
+
         client = ApiClient(args.base_url, args.username, args.password, args.timeout)
-        verify_successes = 0
-        post_successes = 0
-        failures = 0
+        stats = {"verify_successes": 0, "post_successes": 0, "failures": 0}
+        CHUNK_SIZE = 10000
 
-        # Set up the progress bar
-        pbar = tqdm(rows, desc="Processing CSV rows", unit="row")
+        # 3. Stream processing
+        with open(args.csv, "r", encoding="utf-8-sig", newline="") as source:
+            reader = csv.DictReader(source)
+            if not reader.fieldnames:
+                raise ValueError("CSV file is empty or has no header row")
+                
+            missing = [
+                column
+                for column in ("FIRST NAME", "LAST NAME", "BIRTHDATE")
+                if column not in reader.fieldnames
+            ]
+            if missing:
+                raise ValueError(f"CSV is missing required columns: {', '.join(missing)}")
+                
+            fieldnames = list(reader.fieldnames)
+            for column in CHECKPOINT_COLUMNS:
+                if column not in fieldnames:
+                    fieldnames.append(column)
+                    
+            mode = "a" if processed_count > 0 else "w"
+            with open(temp_csv, mode, encoding="utf-8-sig", newline="") as target:
+                writer = csv.DictWriter(target, fieldnames=fieldnames, extrasaction="ignore")
+                if mode == "w":
+                    writer.writeheader()
+                    
+                # Skip already processed rows
+                for _ in range(processed_count):
+                    try:
+                        next(reader)
+                    except StopIteration:
+                        break
+                        
+                chunk = []
+                pbar = tqdm(total=total_rows, initial=processed_count, desc="Processing CSV rows", unit="row")
+                
+                # Stream row by row
+                for row in reader:
+                    chunk.append(row)
+                    if len(chunk) >= CHUNK_SIZE:
+                        _process_and_write_chunk(chunk, client, args, writer, target, pbar, stats)
+                        chunk = []
+                        
+                if chunk:
+                    _process_and_write_chunk(chunk, client, args, writer, target, pbar, stats)
+                    
+                pbar.close()
 
-        for index, row in enumerate(pbar, start=2):
-            if row.get(None):
-                raise ValueError(f"CSV row {index} has more fields than the header")
-
-            # Update progress bar description to show current status
-            pbar.set_postfix({"Verified": verify_successes, "Posted": post_successes, "Errors": failures})
-
-            if args.reverify or not (row.get("VERIFY STATUS") or "").strip():
-                if args.reverify:
-                    row["VERIFY STATUS"] = ""
-                    row["TULOY ID"] = ""
-                    row["MEMBER ID"] = ""
-                    row["TESDA POST STATUS"] = ""
-                try:
-                    result = client.post_json(
-                        "/VerifyMemberBene", verify_payload(row)
-                    )
-                    status = result.get("status")
-                    if status not in ("Matched", "Not Found", "Multiple Match Found"):
-                        raise RuntimeError(f"Unexpected verification response: {result!r}")
-                    if status == "Matched" and (
-                        result.get("tuloy_id") is None or result.get("member_id") is None
-                    ):
-                        raise RuntimeError(
-                            "Verification returned Matched without both IDs"
-                        )
-                    row["VERIFY STATUS"] = status
-                    tuloy_id = result.get("tuloy_id")
-                    member_id = result.get("member_id")
-                    row["TULOY ID"] = "" if tuloy_id is None else str(tuloy_id)
-                    row["MEMBER ID"] = "" if member_id is None else str(member_id)
-                    row["IMPORT ERROR"] = ""
-                    verify_successes += 1
-                    save_csv(args.csv, fieldnames, rows)
-                except RequestTimeout:
-                    raise
-                except (RuntimeError, ValueError, KeyError) as error:
-                    row["IMPORT ERROR"] = f"Verification failed: {error}"
-                    failures += 1
-                    save_csv(args.csv, fieldnames, rows)
-                    tqdm.write(f"Row {index}: {row['IMPORT ERROR']}")
-                    continue
-
-            if args.verify_only:
-                continue
-            if (row.get("TESDA POST STATUS") or "").strip() == "SUCCESS":
-                continue
-            if not (row.get("VERIFY STATUS") or "").strip():
-                continue
-
+        # 4. Atomic file replacement
+        for attempt in range(5):
             try:
-                payload = tesda_payload(row)
-                client.post_json("/PostEnrolleeMatchedTESDA", payload)
-                row["TESDA POST STATUS"] = "SUCCESS"
-                row["IMPORT ERROR"] = ""
-                post_successes += 1
-            except RequestTimeout:
-                raise
-            except (RuntimeError, ValueError, KeyError) as error:
-                row["TESDA POST STATUS"] = "FAILED"
-                row["IMPORT ERROR"] = f"TESDA submission failed: {error}"
-                failures += 1
-                tqdm.write(f"Row {index}: {row['IMPORT ERROR']}")
-            save_csv(args.csv, fieldnames, rows)
-
-        # Ensure final update to progress bar postfix before closing
-        pbar.set_postfix({"Verified": verify_successes, "Posted": post_successes, "Errors": failures})
-        pbar.close()
+                os.replace(temp_csv, args.csv)
+                break
+            except PermissionError as error:
+                if attempt < 4:
+                    time.sleep(0.25 * (2**attempt))
+                    continue
+                winerror = getattr(error, "winerror", None)
+                windows_error = f" Windows error {winerror}." if winerror else ""
+                raise RuntimeError(
+                    f"Processing complete, but cannot update CSV checkpoint '{args.csv}'. "
+                    f"{windows_error} Close any preview/editor preventing replacement."
+                ) from error
 
         print(
-            f"Finished. Verified: {verify_successes}; "
-            f"TESDA submissions: {post_successes}; failures: {failures}."
+            f"Finished. Verified: {stats['verify_successes']}; "
+            f"TESDA submissions: {stats['post_successes']}; failures: {stats['failures']}."
         )
-        return 1 if failures else 0
+        return 1 if stats['failures'] else 0
     except (OSError, ValueError, RuntimeError) as error:
         print(f"Import aborted: {error}", file=sys.stderr)
         return 1
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

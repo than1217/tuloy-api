@@ -1,30 +1,40 @@
-import argparse
-import concurrent.futures
+﻿import argparse
 import csv
 import json
 import os
 import sys
+import tempfile
+import time
 import threading
+import concurrent.futures
 from datetime import datetime
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from dotenv import load_dotenv
+from tqdm import tqdm
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
 load_dotenv(dotenv_path=os.path.join(PROJECT_DIR, ".env"), override=True)
 
-REQUIRED_CSV_COLUMNS = {
-    "Degree Program",
-    "Year level",
-    "Academic Year",
-}
+CHECKPOINT_COLUMNS = (
+    "TULOY ID",
+    "MEMBER ID",
+    "VERIFY STATUS",
+    "CHED POST STATUS",
+    "IMPORT ERROR",
+)
+
 VERIFY_STATUS_VALUES = {"Matched", "Not Found", "Multiple Match Found"}
 
 
 class ApiRequestError(RuntimeError):
+    pass
+
+
+class RequestTimeout(RuntimeError):
     pass
 
 
@@ -50,7 +60,7 @@ class ApiClient:
                 if not self.access_token:
                     self.login()
                 request_token = self.access_token
-            headers["Authorization"] = f"Bearer {request_token}"
+            headers["Authorization"] = f"******"
 
         request = Request(
             f"{self.base_url}/{path.lstrip('/')}",
@@ -72,7 +82,7 @@ class ApiClient:
                 f"POST {path} failed with HTTP {error.code}: {response_body}"
             ) from error
         except TimeoutError as error:
-            raise RuntimeError(
+            raise RequestTimeout(
                 f"POST {path} timed out after {self.timeout:g} seconds"
             ) from error
         except URLError as error:
@@ -114,7 +124,7 @@ class ApiClient:
                 self.access_token = token_data["access_token"]
                 self.refresh_token = token_data.get("refresh_token", self.refresh_token)
         except TimeoutError as error:
-            raise RuntimeError(
+            raise RequestTimeout(
                 f"POST /refresh timed out after {self.timeout:g} seconds"
             ) from error
         except (HTTPError, URLError):
@@ -151,11 +161,11 @@ def verify_payload(row):
     }
 
 
-def ched_payload(row, verification):
-    status = verification.get("status")
-    if status not in VERIFY_STATUS_VALUES:
-        raise ValueError(f"Unexpected verification response: {verification!r}")
-    is_match = status == "Matched"
+def ched_payload(row):
+    verified = (row.get("VERIFY STATUS") or "").strip()
+    if verified not in VERIFY_STATUS_VALUES:
+        raise ValueError(f"Unexpected verification status: {verified!r}")
+    is_match = verified == "Matched"
 
     try:
         year_level = int(row.get("Year level", 0))
@@ -164,15 +174,21 @@ def ched_payload(row, verification):
 
     data = None
     if is_match:
-        tuloy_id = verification.get("tuloy_id")
-        if not tuloy_id or len(str(tuloy_id)) > 50:
-            raise ValueError("Verification returned an invalid TULOY ID")
+        tuloy_id = (row.get("TULOY ID") or "").strip()
+        if not tuloy_id:
+            raise ValueError("Verification says Matched but TULOY ID is empty")
+        if len(tuloy_id) > 50:
+            raise ValueError("TULOY ID exceeds the database limit of 50 characters")
+
+        member_id_value = (row.get("MEMBER ID") or "").strip()
+        if not member_id_value:
+            raise ValueError("Verification says Matched but MEMBER ID is empty")
         try:
-            member_id = int(verification["member_id"])
-        except (KeyError, TypeError, ValueError) as error:
-            raise ValueError("Verification returned an invalid MEMBER ID") from error
+            member_id = int(member_id_value)
+        except ValueError as error:
+            raise ValueError("MEMBER ID must be an unsigned integer") from error
         if not 1 <= member_id <= 4294967295:
-            raise ValueError("Verification returned an invalid MEMBER ID")
+            raise ValueError("MEMBER ID must be between 1 and 4294967295")
 
         data = {
             "id": str(tuloy_id),
@@ -194,43 +210,100 @@ def ched_payload(row, verification):
 
     return {
         "status": is_match,
-        "message": "FOUND" if is_match else status.upper(),
+        "message": "FOUND" if is_match else verified.upper(),
         "enrollment_id": 0,
         "data": data,
         "error_code": None,
     }
 
 
-def process_row(row, client):
-    row_id = row.get("id", "?")
+def process_row_task(row, client, args):
+    v_succ, p_succ, fail = 0, 0, 0
     try:
-        verification = client.post_json("/VerifyMemberBene", verify_payload(row))
-        payload = ched_payload(row, verification)
-        client.post_json("/PostEnrolleeMatchedCHED", payload)
-    except (ApiRequestError, ValueError, KeyError) as error:
-        print(f"Failed to process CSV row {row_id}: {error}")
-        return False
-    return True
+        # Verification Step
+        if args.reverify or not (row.get("VERIFY STATUS") or "").strip():
+            if args.reverify:
+                row["VERIFY STATUS"] = ""
+                row["TULOY ID"] = ""
+                row["MEMBER ID"] = ""
+                row["CHED POST STATUS"] = ""
+            try:
+                result = client.post_json("/VerifyMemberBene", verify_payload(row))
+                status = result.get("status")
+                if status not in VERIFY_STATUS_VALUES:
+                    raise RuntimeError(f"Unexpected verification response: {result!r}")
+                if status == "Matched" and (
+                    result.get("tuloy_id") is None or result.get("member_id") is None
+                ):
+                    raise RuntimeError("Verification returned Matched without both IDs")
+                row["VERIFY STATUS"] = status
+                tuloy_id = result.get("tuloy_id")
+                member_id = result.get("member_id")
+                row["TULOY ID"] = "" if tuloy_id is None else str(tuloy_id)
+                row["MEMBER ID"] = "" if member_id is None else str(member_id)
+                row["IMPORT ERROR"] = ""
+                v_succ = 1
+            except (ApiRequestError, RequestTimeout, RuntimeError, ValueError, KeyError) as error:
+                row["IMPORT ERROR"] = f"Verification failed: {error}"
+                fail = 1
+                return v_succ, p_succ, fail
+
+        # Posting Step
+        if args.verify_only:
+            return v_succ, p_succ, fail
+        if (row.get("CHED POST STATUS") or "").strip() == "SUCCESS":
+            return v_succ, p_succ, fail
+        if not (row.get("VERIFY STATUS") or "").strip():
+            return v_succ, p_succ, fail
+
+        try:
+            payload = ched_payload(row)
+            client.post_json("/PostEnrolleeMatchedCHED", payload)
+            row["CHED POST STATUS"] = "SUCCESS"
+            row["IMPORT ERROR"] = ""
+            p_succ = 1
+        except (ApiRequestError, RequestTimeout, RuntimeError, ValueError, KeyError) as error:
+            row["CHED POST STATUS"] = "FAILED"
+            row["IMPORT ERROR"] = f"CHED submission failed: {error}"
+            fail = 1
+
+    except Exception as e:
+        row["IMPORT ERROR"] = f"Unexpected error: {e}"
+        fail = 1
+
+    return v_succ, p_succ, fail
 
 
-def process_chunk(chunk, client, chunk_index):
-    success_count = 0
-    print(f"[Chunk {chunk_index}] Starting chunk of {len(chunk)} rows...")
+def _process_and_write_chunk(chunk, client, args, writer, target_file, pbar, stats):
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        futures = [executor.submit(process_row_task, r, client, args) for r in chunk]
+        
+        for future in concurrent.futures.as_completed(futures):
+            v_succ, p_succ, fail = future.result()
+            stats["verify_successes"] += v_succ
+            stats["post_successes"] += p_succ
+            stats["failures"] += fail
+            
+            pbar.set_postfix({
+                "Verified": stats["verify_successes"], 
+                "Posted": stats["post_successes"], 
+                "Errors": stats["failures"]
+            })
+            pbar.update(1)
+            
+    # Rows were modified in-place concurrently; write them in original sequential order
+    for row in chunk:
+        writer.writerow(row)
 
-    for index, row in enumerate(chunk):
-        if process_row(row, client):
-            success_count += 1
-
-        if (index + 1) % 1000 == 0:
-            print(f"[Chunk {chunk_index}] Progress: {index + 1} / {len(chunk)} processed")
-
-    print(f"[Chunk {chunk_index}] Completed. Success: {success_count} / {len(chunk)}")
-    return success_count
+    target_file.flush()
+    os.fsync(target_file.fileno())
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Import CHED CSV data via API.")
-    parser.add_argument("--csv", required=True, help="Path to the CSV file to import")
+    parser = argparse.ArgumentParser(
+        description="Verify CHED CSV records and submit them through the Tuloy API."
+    )
+    parser.add_argument("--csv", required=True, help="CSV file to process")
     parser.add_argument(
         "--base-url",
         default=os.getenv("TULOY_API_BASE_URL"),
@@ -247,6 +320,16 @@ def main(argv=None):
         help="API password (or set TULOY_API_PASSWORD)",
     )
     parser.add_argument("--timeout", type=float, default=30, help="Request timeout in seconds")
+    parser.add_argument(
+        "--verify-only",
+        action="store_true",
+        help="Only call VerifyMemberBene and save the IDs/statuses to the CSV",
+    )
+    parser.add_argument(
+        "--reverify",
+        action="store_true",
+        help="Re-run verification even when the CSV already has a VERIFY STATUS",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -257,21 +340,43 @@ def main(argv=None):
             )
         if args.timeout <= 0:
             raise ValueError("--timeout must be greater than zero")
-        if not os.path.exists(args.csv):
-            raise FileNotFoundError(f"CSV file {args.csv} not found.")
 
-        chunks = []
-        current_chunk = []
+        if not os.path.exists(args.csv):
+            print(f"CSV file {args.csv} not found.")
+            return 1
+
+        # 1. Count total rows in the source CSV (fast pass)
+        with open(args.csv, "r", encoding="utf-8-sig") as f:
+            total_rows = sum(1 for _ in f) - 1 # Subtract header
+            
+        if total_rows <= 0:
+            print("CSV contains no data rows.")
+            return 0
+
+        # 2. Check for temporary progress file
+        temp_csv = args.csv + ".tmp"
+        processed_count = 0
+        if os.path.exists(temp_csv):
+            with open(temp_csv, "r", encoding="utf-8-sig") as f:
+                processed_count = sum(1 for _ in f) - 1
+            if processed_count < 0:
+                processed_count = 0
+                
+        if processed_count >= total_rows:
+            print("All rows already processed. Finalizing file replacement...")
+            os.replace(temp_csv, args.csv)
+            return 0
+
+        client = ApiClient(args.base_url, args.username, args.password, args.timeout)
+        stats = {"verify_successes": 0, "post_successes": 0, "failures": 0}
+        CHUNK_SIZE = 10000
+
+        # 3. Stream processing
         with open(args.csv, "r", encoding="utf-8-sig", newline="") as source:
             reader = csv.DictReader(source)
             if not reader.fieldnames:
-                raise ValueError("CSV file is empty or has no header row.")
-            missing_columns = sorted(REQUIRED_CSV_COLUMNS - set(reader.fieldnames))
-            if missing_columns:
-                raise ValueError(
-                    "CSV is missing required columns: "
-                    f"{', '.join(missing_columns)}."
-                )
+                raise ValueError("CSV file is empty or has no header row")
+                
             header = set(reader.fieldnames)
             has_raw_names = {"First name", "Last name", "Birthdate"} <= header
             has_enriched_names = {
@@ -279,45 +384,68 @@ def main(argv=None):
                 "MEMBER Last name",
                 "Birthday",
             } <= header
+            
             if not has_raw_names and not has_enriched_names:
                 raise ValueError(
                     "CSV must include First name, Last name, and Birthdate "
                     "(or the corresponding MEMBER First name, MEMBER Last name, "
                     "and Birthday columns)."
                 )
-            for row in reader:
-                current_chunk.append(row)
-                if len(current_chunk) == 10000:
-                    chunks.append(current_chunk)
-                    current_chunk = []
-        if current_chunk:
-            chunks.append(current_chunk)
+                
+            fieldnames = list(reader.fieldnames)
+            for column in CHECKPOINT_COLUMNS:
+                if column not in fieldnames:
+                    fieldnames.append(column)
+                    
+            mode = "a" if processed_count > 0 else "w"
+            with open(temp_csv, mode, encoding="utf-8-sig", newline="") as target:
+                writer = csv.DictWriter(target, fieldnames=fieldnames, extrasaction="ignore")
+                if mode == "w":
+                    writer.writeheader()
+                    
+                # Skip already processed rows
+                for _ in range(processed_count):
+                    try:
+                        next(reader)
+                    except StopIteration:
+                        break
+                        
+                chunk = []
+                pbar = tqdm(total=total_rows, initial=processed_count, desc="Processing CSV rows", unit="row")
+                
+                # Stream row by row
+                for row in reader:
+                    chunk.append(row)
+                    if len(chunk) >= CHUNK_SIZE:
+                        _process_and_write_chunk(chunk, client, args, writer, target, pbar, stats)
+                        chunk = []
+                        
+                if chunk:
+                    _process_and_write_chunk(chunk, client, args, writer, target, pbar, stats)
+                    
+                pbar.close()
 
-        total_rows = sum(len(chunk) for chunk in chunks)
-        if not total_rows:
-            print("CSV contains no data rows.")
-            return 0
+        # 4. Atomic file replacement
+        for attempt in range(5):
+            try:
+                os.replace(temp_csv, args.csv)
+                break
+            except PermissionError as error:
+                if attempt < 4:
+                    time.sleep(0.25 * (2**attempt))
+                    continue
+                winerror = getattr(error, "winerror", None)
+                windows_error = f" Windows error {winerror}." if winerror else ""
+                raise RuntimeError(
+                    f"Processing complete, but cannot update CSV checkpoint '{args.csv}'. "
+                    f"{windows_error} Close any preview/editor preventing replacement."
+                ) from error
 
-        client = ApiClient(args.base_url, args.username, args.password, args.timeout)
         print(
-            f"Loaded {total_rows} rows into {len(chunks)} chunks of up to "
-            "10,000 rows. Processing with 5 workers..."
+            f"Finished. Verified: {stats['verify_successes']}; "
+            f"CHED submissions: {stats['post_successes']}; failures: {stats['failures']}."
         )
-        total_success = 0
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-            futures = {
-                executor.submit(process_chunk, chunk, client, index): index
-                for index, chunk in enumerate(chunks, 1)
-            }
-            for future in concurrent.futures.as_completed(futures):
-                try:
-                    total_success += future.result()
-                except (RuntimeError, ValueError, KeyError) as error:
-                    index = futures[future]
-                    print(f"[Chunk {index}] Failed with exception: {error}")
-
-        print(f"Done! Successfully imported {total_success} out of {total_rows} rows.")
-        return 0 if total_success == total_rows else 1
+        return 1 if stats['failures'] else 0
     except (OSError, ValueError, RuntimeError) as error:
         print(f"Import aborted: {error}", file=sys.stderr)
         return 1
