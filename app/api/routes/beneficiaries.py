@@ -401,3 +401,132 @@ def get_matched_tesda_records(
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     finally:
         cursor.close()
+
+@router.get("/GetValidatedEnrollees")
+def get_validated_enrollees(current_user: dict = Depends(get_current_user), db = Depends(get_db_connection)):
+    """
+    Retrieves the current validated student enrollees for both CHED and TESDA.
+    Returns: agency_name, tuloy_id, member_id, enrollment_details (json), created_at, updated_at
+    """
+    cursor = db.cursor(dictionary=True)
+    query = """
+        SELECT 
+            'CHED' AS agency_name,
+            tuloy_id,
+            member_id,
+            student_id,
+            mm_first_name,
+            mm_middle_name,
+            mm_last_name,
+            degree_program_name,
+            degree_date_enrolled,
+            degree_program_duration,
+            degree_academic_year,
+            degree_year_level,
+            degree_semester,
+            enrollment_status,
+            date_encoded,
+            date_updated,
+            NULL AS uli_id,
+            NULL AS diploma,
+            NULL AS short_course,
+            created_at,
+            updated_at
+        FROM enroll_matched_CHED_tbl
+        
+        UNION ALL
+        
+        SELECT 
+            'TESDA' AS agency_name,
+            tuloy_id,
+            member_id,
+            NULL AS student_id,
+            mm_first_name,
+            mm_middle_name,
+            mm_last_name,
+            NULL AS degree_program_name,
+            NULL AS degree_date_enrolled,
+            NULL AS degree_program_duration,
+            NULL AS degree_academic_year,
+            NULL AS degree_year_level,
+            NULL AS degree_semester,
+            NULL AS enrollment_status,
+            NULL AS date_encoded,
+            NULL AS date_updated,
+            uli_id,
+            diploma,
+            short_course,
+            created_at,
+            updated_at
+        FROM enroll_matched_TESDA_tbl
+        
+        ORDER BY created_at DESC
+    """
+    
+    try:
+        cursor.execute(query)
+        rows = cursor.fetchall()
+        
+        response_data = []
+        for row in rows:
+            agency = row['agency_name']
+            details = {}
+            if agency == 'CHED':
+                details = {
+                    "student_id": row['student_id'],
+                    "mm_first_name": row['mm_first_name'],
+                    "mm_middle_name": row['mm_middle_name'],
+                    "mm_last_name": row['mm_last_name'],
+                    "degree_program_name": row['degree_program_name'],
+                    "degree_date_enrolled": str(row['degree_date_enrolled']) if row['degree_date_enrolled'] else None,
+                    "degree_program_duration": row['degree_program_duration'],
+                    "degree_academic_year": row['degree_academic_year'],
+                    "degree_year_level": row['degree_year_level'],
+                    "degree_semester": row['degree_semester'],
+                    "enrollment_status": row['enrollment_status'],
+                    "date_encoded": str(row['date_encoded']) if row['date_encoded'] else None,
+                    "date_updated": str(row['date_updated']) if row['date_updated'] else None,
+                }
+            else:
+                diploma_data = row['diploma']
+                if isinstance(diploma_data, str):
+                    try:
+                        diploma_data = json.loads(diploma_data)
+                    except:
+                        diploma_data = None
+                        
+                short_course_data = row['short_course']
+                if isinstance(short_course_data, str):
+                    try:
+                        short_course_data = json.loads(short_course_data)
+                    except:
+                        short_course_data = None
+                        
+                details = {
+                    "uli_id": row['uli_id'],
+                    "mm_first_name": row['mm_first_name'],
+                    "mm_middle_name": row['mm_middle_name'],
+                    "mm_last_name": row['mm_last_name'],
+                    "diploma": diploma_data,
+                    "short_course": short_course_data
+                }
+                
+            # Filter out None values to keep the JSON clean
+            details = {k: v for k, v in details.items() if v is not None}
+            
+            response_data.append({
+                "agency_name": agency,
+                "tuloy_id": row['tuloy_id'],
+                "member_id": row['member_id'],
+                "enrollment_details": details,
+                "created_at": str(row['created_at']) if row['created_at'] else None,
+                "updated_at": str(row['updated_at']) if row['updated_at'] else None
+            })
+            
+        return {"status": True, "data": response_data}
+        
+    except Error as e:
+        logger.exception("Database error while fetching validated enrollees")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        cursor.close()
