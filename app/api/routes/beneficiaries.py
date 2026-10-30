@@ -403,12 +403,18 @@ def get_matched_tesda_records(
         cursor.close()
 
 @router.get("/GetValidatedEnrollees")
-def get_validated_enrollees(current_user: dict = Depends(get_current_user), db = Depends(get_db_connection)):
+def get_validated_enrollees(
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    current_user: dict = Depends(get_current_user),
+    db = Depends(get_db_connection)
+):
     """
     Retrieves the current validated student enrollees for both CHED and TESDA.
     Returns: agency_name, tuloy_id, member_id, enrollment_details (json), created_at, updated_at
     """
     cursor = db.cursor(dictionary=True)
+    # We fetch limit + 1 to check if there are more records
     query = """
         SELECT 
             'CHED' AS agency_name,
@@ -461,14 +467,19 @@ def get_validated_enrollees(current_user: dict = Depends(get_current_user), db =
         FROM enroll_matched_TESDA_tbl
         
         ORDER BY created_at DESC
+        LIMIT %s OFFSET %s
     """
     
     try:
-        cursor.execute(query)
+        cursor.execute(query, (limit + 1, offset))
         rows = cursor.fetchall()
         
+        has_more = len(rows) > limit
+        # slice off the extra row used for checking if has_more
+        actual_rows = rows[:limit]
+        
         response_data = []
-        for row in rows:
+        for row in actual_rows:
             agency = row['agency_name']
             details = {}
             if agency == 'CHED':
@@ -523,7 +534,14 @@ def get_validated_enrollees(current_user: dict = Depends(get_current_user), db =
                 "updated_at": str(row['updated_at']) if row['updated_at'] else None
             })
             
-        return {"status": True, "data": response_data}
+        return {
+            "status": True, 
+            "data": response_data,
+            "limit": limit,
+            "offset": offset,
+            "has_more": has_more,
+            "next_offset": offset + limit if has_more else None
+        }
         
     except Error as e:
         logger.exception("Database error while fetching validated enrollees")

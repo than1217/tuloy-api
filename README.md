@@ -102,7 +102,7 @@ To run the application, you can execute the `main.py` script as a module, or run
 python -m app.main
 
 # OR using uvicorn directly
-uvicorn app.main:app --reload
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 Application logs are written to `logs/tuloy-api.log` and the console. The log rotates at 5 MB and retains up to five backups. API request logs include the method, path, status, and duration; request bodies and credentials are not logged.
