@@ -8,13 +8,12 @@ from urllib.error import URLError
 
 # Get the absolute path to the parent directory where the CSV is located
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-CSV_FILE = os.path.join(SCRIPT_DIR, "CHED-Matching.csv")
 
 # Set up argument parsing
 parser = argparse.ArgumentParser(description="Import CHED CSV data via API.")
 parser.add_argument("--host", type=str, default="http://127.0.0.1", help="The API host URL (e.g., http://127.0.0.1 or https://api.example.com)")
 parser.add_argument("--port", type=str, default="", help="The API port (if any, e.g., 8000)")
-parser.add_argument("--csv", type=str, default=CSV_FILE, help="Path to the CSV file to import")
+parser.add_argument("--csv", type=str, required=True, help="Path to the CSV file to import")
 args = parser.parse_args()
 
 CSV_FILE = args.csv

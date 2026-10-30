@@ -1,8 +1,16 @@
+import argparse
 import os
 import csv
 import json
 import mysql.connector
 from dotenv import load_dotenv
+
+# Set up argument parsing
+parser = argparse.ArgumentParser(description="Import TESDA CSV data into the database.")
+parser.add_argument("--csv", type=str, required=True, help="Path to the CSV file to import")
+args = parser.parse_args()
+
+CSV_PATH = args.csv
 
 # Load env
 load_dotenv(override=True)
@@ -62,8 +70,6 @@ except Exception as e:
     if ssh_tunnel:
         ssh_tunnel.stop()
     exit(1)
-
-CSV_PATH = r"C:\Users\jfigueroa\Desktop\DSWD\Tuloy\tuloy-api\others\TESDA Matching 136.csv"
 
 def clean_val(v):
     if not v or str(v).strip() == "":

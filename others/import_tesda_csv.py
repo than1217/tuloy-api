@@ -16,7 +16,6 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
 load_dotenv(dotenv_path=os.path.join(PROJECT_DIR, ".env"), override=True)
 
-DEFAULT_CSV = os.path.join(SCRIPT_DIR, "TESDA Matching 136.csv")
 CHECKPOINT_COLUMNS = (
     "TULOY ID",
     "MEMBER ID",
@@ -273,7 +272,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Verify TESDA CSV records and submit them through the Tuloy API."
     )
-    parser.add_argument("--csv", default=DEFAULT_CSV, help="CSV file to process")
+    parser.add_argument("--csv", required=True, help="CSV file to process")
     parser.add_argument(
         "--base-url",
         default=os.getenv("TULOY_API_BASE_URL"),

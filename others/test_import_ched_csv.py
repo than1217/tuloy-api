@@ -3,11 +3,18 @@ import json
 import requests
 import os
 import concurrent.futures
+import argparse
 from urllib.error import URLError
 
 # Get the absolute path to the parent directory where the CSV is located
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-CSV_FILE = os.path.join(SCRIPT_DIR, "CHED-Matching.csv")
+
+# Set up argument parsing
+parser = argparse.ArgumentParser(description="Test import CHED CSV data via API.")
+parser.add_argument("--csv", type=str, required=True, help="Path to the CSV file to import")
+args = parser.parse_args()
+
+CSV_FILE = args.csv
 API_URL = "http://127.0.0.1/PostEnrolleeMatchedCHED"
 # Change to the appropriate token once authenticated, or disable auth temporarily if needed for import
 # For the sake of this script, we'll assume we can get a token via the token endpoint
