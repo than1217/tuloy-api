@@ -17,13 +17,15 @@ This project is a FastAPI application that provides secure authentication and an
 
 ## Project Structure
 
-The codebase is organized modularly:
-- **`main.py`**: Application entrypoint and startup configuration.
-- **`database.py`**: MySQL database connection and SSH tunnel logic.
-- **`schemas.py`**: Pydantic models for request validation.
-- **`security.py`**: JWT generation and password hashing.
-- **`utils.py`**: Helper functions (e.g., MD5 hashing).
-- **`routers/`**: Contains the API route definitions (`auth.py` and `beneficiaries.py`).
+The codebase is organized modularly using a standard FastAPI structure:
+- **`app/main.py`**: Application entrypoint and startup configuration.
+- **`app/db/`**: MySQL database connection and SSH tunnel logic.
+- **`app/schemas/`**: Pydantic models for request validation.
+- **`app/core/`**: JWT generation, password hashing, and logging configuration.
+- **`app/utils/`**: Helper functions (e.g., MD5 hashing).
+- **`app/api/routes/`**: Contains the API route definitions (`auth.py` and `beneficiaries.py`).
+- **`scripts/`**: Auxiliary scripts for data import and DB checks.
+- **`tests/`**: Unit tests.
 
 ## Installation
 
@@ -93,10 +95,14 @@ Before running the application, ensure your database has:
 
 ## Usage
 
-To run the application, simply execute the `main.py` script:
+To run the application, you can execute the `main.py` script as a module, or run it directly:
 
 ```bash
-python main.py
+# Run as module
+python -m app.main
+
+# OR using uvicorn directly
+uvicorn app.main:app --reload
 ```
 
 Application logs are written to `logs/tuloy-api.log` and the console. The log rotates at 5 MB and retains up to five backups. API request logs include the method, path, status, and duration; request bodies and credentials are not logged.

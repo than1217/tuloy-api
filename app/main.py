@@ -210,4 +210,4 @@ if __name__ == "__main__":
     local_ip = "0.0.0.0"
     port = 8000
     logger.info("Starting server on http://%s:%s", local_ip, port)
-    uvicorn.run("main:app", host=local_ip, port=port, reload=False)
+    uvicorn.run("app.main:app", host=local_ip, port=port, reload=False)
