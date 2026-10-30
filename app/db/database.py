@@ -3,7 +3,7 @@ import mysql.connector
 from mysql.connector import Error
 from fastapi import HTTPException
 from dotenv import load_dotenv
-from logging_config import configure_logging
+from app.core.logging_config import configure_logging
 
 load_dotenv(override=True)
 

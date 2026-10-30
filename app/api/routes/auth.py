@@ -4,9 +4,9 @@ from datetime import timedelta
 import mysql.connector
 from mysql.connector import Error
 
-from database import get_db_connection
-from schemas import UserCreate
-from security import (
+from app.db.database import get_db_connection
+from app.schemas.schemas import UserCreate
+from app.core.security import (
     authenticate_user, 
     create_access_token,
     create_refresh_token,

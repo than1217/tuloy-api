@@ -3,10 +3,10 @@ from fastapi.encoders import jsonable_encoder
 from mysql.connector import Error
 import json
 
-from database import get_db_connection
-from logging_config import configure_logging
-from schemas import UserInput, ChedResponsePayload, MothersMaiden, Degree, TesdaResponsePayload
-from security import get_current_user
+from app.db.database import get_db_connection
+from app.core.logging_config import configure_logging
+from app.schemas.schemas import UserInput, ChedResponsePayload, MothersMaiden, Degree, TesdaResponsePayload
+from app.core.security import get_current_user
 
 router = APIRouter(tags=["Beneficiaries"])
 logger = configure_logging()

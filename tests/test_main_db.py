@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 import mysql.connector
 from sshtunnel import SSHTunnelForwarder
-import database
+from app.db import database
 
 load_dotenv(override=True)
 
@@ -24,14 +24,22 @@ tunnel_kwargs = {
 database.ssh_tunnel = SSHTunnelForwarder(**tunnel_kwargs)
 database.ssh_tunnel.start()
 
-config = database.get_db_config()
+print(f"Tunnel local port: {database.ssh_tunnel.local_bind_port}")
 
+print("Calling get_db_config()...")
+config = database.get_db_config()
+print(f"Config: {config}")
+
+print("Connecting...")
 try:
     conn = mysql.connector.connect(**config)
-    cursor = conn.cursor()
-    cursor.execute("SHOW FULL TABLES LIKE '%TESDA%'")
-    for row in cursor.fetchall():
-        print(row)
+    print("Connected successfully!")
+    cursor = conn.cursor(dictionary=True)
+    print("Checking processlist...")
+    cursor.execute("SHOW PROCESSLIST")
+    processes = cursor.fetchall()
+    for p in processes:
+        print(p)
     conn.close()
 except Exception as e:
     print(f"Connection failed: {e}")

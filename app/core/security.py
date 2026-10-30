@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastapi import HTTPException, status, Depends
 from fastapi.security import OAuth2PasswordBearer
-from database import get_db_connection
+from app.db.database import get_db_connection
 
 SECRET_KEY = os.getenv("SECRET_KEY", "your-super-secret-key-for-jwt")
 REFRESH_SECRET_KEY = os.getenv("REFRESH_SECRET_KEY", "your-super-secret-refresh-key-for-jwt")
