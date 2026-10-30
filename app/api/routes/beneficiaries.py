@@ -164,6 +164,13 @@ def get_validated_enrollees(
                 "agency_name": row.get('agency_name'),
                 "tuloy_id": row.get('tuloy_id'),
                 "member_id": row.get('member_id'),
+                "first_name": row.get('first_name'),
+                "middle_name": row.get('middle_name'),
+                "last_name": row.get('last_name'),
+                "region": row.get('region'),
+                "province": row.get('province'),
+                "municipality": row.get('municipality'),
+                "barangay": row.get('barangay'),
                 "enrollment_details": details,
                 "created_at": str(row.get('created_at')) if row.get('created_at') else None,
                 "updated_at": str(row.get('updated_at')) if row.get('updated_at') else None
