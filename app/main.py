@@ -16,7 +16,7 @@ try:
 except ImportError:
     SSHTunnelForwarder = None
 
-from app.api.routes import auth, verify_member_bene, get_eligible_bene, post_enrollee_matched_ched, post_enrollee_matched_tesda, get_matched_ched_bene, get_matched_tesda_bene, get_validated_enrollees
+from app.api.routes.api import api_router
 
 logger = configure_logging()
 
@@ -191,14 +191,7 @@ async def log_requests(request: Request, call_next):
     return response
 
 
-app.include_router(auth.router)
-app.include_router(verify_member_bene.router)
-app.include_router(get_eligible_bene.router)
-app.include_router(post_enrollee_matched_ched.router)
-app.include_router(post_enrollee_matched_tesda.router)
-app.include_router(get_matched_ched_bene.router)
-app.include_router(get_matched_tesda_bene.router)
-app.include_router(get_validated_enrollees.router)
+app.include_router(api_router)
 
 if __name__ == "__main__":
     import uvicorn
