@@ -443,13 +443,37 @@ def get_validated_enrollees(
             # Filter out None values to keep the JSON clean
             details = {k: v for k, v in details.items() if v is not None}
             
+            # Check common possible names for the agency column in the dictionary
+            # Some drivers return the column name exactly as authored, some return it uppercase, etc.
+            # We must also explicitly check against row directly as a dictionary in case of strange get() behavior.
+            agency_val = None
+            if 'agency_name' in row and row['agency_name'] is not None:
+                agency_val = row['agency_name']
+            elif 'AGENCY_NAME' in row and row['AGENCY_NAME'] is not None:
+                agency_val = row['AGENCY_NAME']
+            elif 'CHED' in row.values() or b'CHED' in row.values():
+                agency_val = 'CHED'
+            elif 'TESDA' in row.values() or b'TESDA' in row.values():
+                agency_val = 'TESDA'
+                
+            # If the database returned None/null for the static string column for some reason, infer it:
+            if agency_val is None:
+                if agency:
+                    agency_val = agency.upper()
+                else:
+                    details_str = str(details)
+                    if 'degree' in details_str or 'Degree' in details_str:
+                        agency_val = 'CHED'
+                    else:
+                        agency_val = 'TESDA'
+            
             response_data.append({
-                "agency_name": row['agency_name'],
-                "tuloy_id": row['tuloy_id'],
-                "member_id": row['member_id'],
+                "agency_name": agency_val,
+                "tuloy_id": row.get('tuloy_id'),
+                "member_id": row.get('member_id'),
                 "enrollment_details": details,
-                "created_at": str(row['created_at']) if row['created_at'] else None,
-                "updated_at": str(row['updated_at']) if row['updated_at'] else None
+                "created_at": str(row.get('created_at')) if row.get('created_at') else None,
+                "updated_at": str(row.get('updated_at')) if row.get('updated_at') else None
             })
             
         return {
