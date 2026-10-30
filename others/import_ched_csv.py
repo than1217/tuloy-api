@@ -60,7 +60,7 @@ class ApiClient:
                 if not self.access_token:
                     self.login()
                 request_token = self.access_token
-            headers["Authorization"] = f"******"
+            headers["Authorization"] = "Bearer " + str(request_token)
 
         request = Request(
             f"{self.base_url}/{path.lstrip('/')}",

@@ -70,7 +70,7 @@ class ApiClient:
                     self.login()
                 request_token = self.access_token
             # Note: Changed to standard Bearer token scheme
-            headers["Authorization"] = f"Bearer {request_token}"
+            headers["Authorization"] = "Bearer " + str(request_token)
 
         request = Request(
             f"{self.base_url}/{path.lstrip('/')}",
