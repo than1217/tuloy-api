@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
 from mysql.connector import Error
+from typing import Optional
 import json
 
 from app.db.database import get_db_connection
@@ -404,6 +405,7 @@ def get_matched_tesda_records(
 
 @router.get("/GetValidatedEnrollees")
 def get_validated_enrollees(
+    agency: Optional[str] = Query(None, description="Filter by agency (CHED or TESDA)"),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     current_user: dict = Depends(get_current_user),
@@ -414,8 +416,9 @@ def get_validated_enrollees(
     Returns: agency_name, tuloy_id, member_id, enrollment_details (json), created_at, updated_at
     """
     cursor = db.cursor(dictionary=True)
+    
     # We fetch limit + 1 to check if there are more records
-    query = """
+    base_query = """
         SELECT 
             'CHED' AS agency_name,
             tuloy_id,
@@ -465,13 +468,33 @@ def get_validated_enrollees(
             created_at,
             updated_at
         FROM enroll_matched_TESDA_tbl
-        
-        ORDER BY created_at DESC
-        LIMIT %s OFFSET %s
     """
     
+    if agency:
+        # User specified an agency, so we filter the UNION output
+        # It's safest to wrap the UNION in a derived table and filter on it
+        agency = agency.upper()
+        if agency not in ["CHED", "TESDA"]:
+            raise HTTPException(status_code=400, detail="Agency must be either CHED or TESDA")
+            
+        query = f"""
+            SELECT * FROM ({base_query}) AS all_agencies 
+            WHERE agency_name = %s
+            ORDER BY created_at DESC
+            LIMIT %s OFFSET %s
+        """
+        params = (agency, limit + 1, offset)
+    else:
+        # No agency specified, just return all
+        query = f"""
+            SELECT * FROM ({base_query}) AS all_agencies
+            ORDER BY created_at DESC
+            LIMIT %s OFFSET %s
+        """
+        params = (limit + 1, offset)
+    
     try:
-        cursor.execute(query, (limit + 1, offset))
+        cursor.execute(query, params)
         rows = cursor.fetchall()
         
         has_more = len(rows) > limit
