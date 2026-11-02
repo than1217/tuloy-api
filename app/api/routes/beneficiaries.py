@@ -1,3 +1,5 @@
+import hashlib
+import re
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
 from mysql.connector import Error
@@ -16,6 +18,14 @@ router = APIRouter(tags=['Beneficiaries'])
 def match_user(user: UserInput, current_user: dict = Depends(get_current_user), db = Depends(get_db_connection)):
     cursor = db.cursor(dictionary=True)
     
+    # 1. Compute match_keys hash in Python
+    fn = re.sub(r'\s+', ' ', user.first_name).strip().upper()
+    ln = re.sub(r'\s+', ' ', user.last_name).strip().upper()
+    dob = user.date_of_birth
+    
+    concat_str = f"{fn}/{ln}/{dob}"
+    match_keys_bytes = hashlib.md5(concat_str.encode('utf-8')).digest()
+
     optional_filters = {
         "middle_name": user.middle_name,
         "sex": user.sex,
@@ -39,13 +49,9 @@ def match_user(user: UserInput, current_user: dict = Depends(get_current_user), 
         # 2. Query the source table
         select_query = r"""
             SELECT * FROM vw_verify_member_bene 
-            WHERE match_keys = UNHEX(MD5(CONCAT_WS('/', 
-                UPPER(TRIM(REGEXP_REPLACE(%s, '\\s+', ' '))),
-                UPPER(TRIM(REGEXP_REPLACE(%s, '\\s+', ' '))), 
-                %s
-            )))
+            WHERE match_keys = %s
         """
-        query_params = [user.first_name, user.last_name, user.date_of_birth]
+        query_params = [match_keys_bytes]
         for field, value in optional_filters.items():
             if value is not None:
                 select_query += f" AND {optional_filter_columns[field]} = %s"
