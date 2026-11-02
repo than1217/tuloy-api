@@ -18,10 +18,23 @@ def login():
         headers={"Content-Type": "application/x-www-form-urlencoded"}
     )
     response.raise_for_status()
-    return response.json()["access_token"]
+    data = response.json()
+    return data["access_token"], data.get("refresh_token")
 
-def warmup_cache(token):
-    headers = {"Authorization": f"Bearer {token}"}
+def refresh_token(ref_token):
+    print("Refreshing access token...")
+    response = requests.post(
+        f"{BASE_URL}/refresh",
+        json={"refresh_token": ref_token},
+        headers={"Content-Type": "application/json"}
+    )
+    response.raise_for_status()
+    data = response.json()
+    # It might return a new refresh token or just the access token
+    return data["access_token"], data.get("refresh_token", ref_token)
+
+def warmup_cache(access_token, refresh_tok):
+    headers = {"Authorization": f"Bearer {access_token}"}
     offset = 0
     limit = 5000
 
@@ -39,6 +52,20 @@ def warmup_cache(token):
                 headers=headers, 
                 params={"limit": limit, "offset": offset}
             )
+            
+            # If token expired, try to refresh it
+            if response.status_code == 401:
+                print("Token expired. Using refresh token...")
+                try:
+                    access_token, refresh_tok = refresh_token(refresh_tok)
+                except Exception:
+                    # If refresh token is also invalid/expired, fall back to full login
+                    print("Refresh failed. Falling back to full login...")
+                    access_token, refresh_tok = login()
+                    
+                headers = {"Authorization": f"Bearer {access_token}"}
+                continue
+                
             response.raise_for_status()
             data = response.json()
             
@@ -74,7 +101,7 @@ if __name__ == "__main__":
         exit(1)
         
     try:
-        token = login()
-        warmup_cache(token)
+        access_token, refresh_tok = login()
+        warmup_cache(access_token, refresh_tok)
     except Exception as e:
         print(f"Fatal error: {e}")
