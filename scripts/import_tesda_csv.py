@@ -83,7 +83,7 @@ try:
     with open(CSV_PATH, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         for row in reader:
-            tuloy_id = clean_val(row.get('TULOY ID'))
+            tuloy_id = clean_val(row.get('TULOY ID')) or clean_val(row.get('HHID'))
             verify_status = clean_val(row.get('VERIFY STATUS'))
             
             if verify_status == "Matched":

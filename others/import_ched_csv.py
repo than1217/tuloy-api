@@ -172,9 +172,10 @@ def ched_payload(row):
     except (TypeError, ValueError):
         year_level = 0
 
+    tuloy_id = (row.get("TULOY ID") or row.get("dswd_member_id") or row.get("Household ID") or "").strip()
+
     data = None
     if is_match:
-        tuloy_id = (row.get("TULOY ID") or "").strip()
         if not tuloy_id:
             raise ValueError("Verification says Matched but TULOY ID is empty")
         if len(tuloy_id) > 50:
@@ -207,6 +208,9 @@ def ched_payload(row):
             "date_encoded": None,
             "date_updated": None,
         }
+    else:
+        if tuloy_id:
+            data = {"id": str(tuloy_id)}
 
     return {
         "status": is_match,

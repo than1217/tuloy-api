@@ -30,9 +30,15 @@ def record_ched_response(
         member_id_str = ""
         if payload.data:
             if payload.data.id:
-                member_id_str = str(payload.data.id)
+                member_id_str = str(payload.data.id).strip()
             elif payload.data.member_id:
-                member_id_str = str(payload.data.member_id)
+                member_id_str = str(payload.data.member_id).strip()
+                
+        if not member_id_str:
+            raise HTTPException(
+                status_code=422,
+                detail="A tuloy_id or member_id is required in the payload data, even for unmatched records."
+            )
                 
         db_status = payload.message or ("FOUND" if payload.status else "NOT FOUND")
         
@@ -136,7 +142,13 @@ def record_tesda_response(
         transaction_tuloy_id = ""
         if payload.data:
             if payload.data.id:
-                transaction_tuloy_id = payload.data.id
+                transaction_tuloy_id = str(payload.data.id).strip()
+                
+        if not transaction_tuloy_id:
+            raise HTTPException(
+                status_code=422,
+                detail="A tuloy_id (id) is required in the payload data, even for unmatched records."
+            )
                 
         db_status = payload.message or ("FOUND" if payload.status else "NOT FOUND")
         

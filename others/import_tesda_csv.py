@@ -162,10 +162,11 @@ def tesda_payload(row):
     if verified not in ("Matched", "Not Found", "Multiple Match Found"):
         raise ValueError(f"Unexpected verification status: {verified!r}")
     matched = verified == "Matched"
+    
+    tuloy_id = (row.get("TULOY ID") or row.get("HHID") or "").strip()
 
     data = None
     if matched:
-        tuloy_id = (row.get("TULOY ID") or "").strip()
         if not tuloy_id:
             raise ValueError("Verification says Matched but TULOY ID is empty")
         if len(tuloy_id) > 50:
@@ -211,6 +212,9 @@ def tesda_payload(row):
             "date_encoded": None,
             "date_updated": None,
         }
+    else:
+        if tuloy_id:
+            data = {"id": tuloy_id}
 
     message = "FOUND" if matched else verified.upper()
     return {
