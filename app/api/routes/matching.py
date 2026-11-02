@@ -249,7 +249,7 @@ def get_matched_ched_records(
     cursor = db.cursor(dictionary=True)
     try:
         cursor.execute(
-            "SELECT * FROM vw_get_matched_CHED LIMIT %s OFFSET %s",
+            "SELECT * FROM vw_get_matched_CHED ORDER BY tuloy_id ASC LIMIT %s OFFSET %s",
             (limit + 1, offset),
         )
         rows = cursor.fetchall()
@@ -281,7 +281,7 @@ def get_matched_tesda_records(
     cursor = db.cursor(dictionary=True)
     try:
         cursor.execute(
-            "SELECT * FROM vw_get_matched_TESDA LIMIT %s OFFSET %s",
+            "SELECT * FROM vw_get_matched_TESDA ORDER BY tuloy_id ASC LIMIT %s OFFSET %s",
             (limit + 1, offset),
         )
         rows = cursor.fetchall()

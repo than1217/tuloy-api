@@ -98,8 +98,9 @@ def get_eligible_bene(
             `date_of_birth`,`sex_id`,`member_id`,`listahanan_id`,
             `lrn`,`philsys`,`grade_level`,
             `region_name`,`barangay_name`,`client_status`,`roster_status`, `tuloy_id` 
-            FROM vw_unmatched_member_bene """ \
-            "LIMIT %s OFFSET %s",
+            FROM vw_unmatched_member_bene 
+            ORDER BY `tuloy_id` ASC 
+            LIMIT %s OFFSET %s""",
             (limit + 1, offset),
         )
         rows = cursor.fetchall()
@@ -140,10 +141,10 @@ def get_validated_enrollees(
         if agency not in ["CHED", "TESDA"]:
             raise HTTPException(status_code=400, detail="Agency must be either CHED or TESDA")
             
-        query = "SELECT * FROM vw_unified_matched_enrollment WHERE agency_name = %s LIMIT %s OFFSET %s"
+        query = "SELECT * FROM vw_unified_matched_enrollment WHERE agency_name = %s ORDER BY tuloy_id ASC LIMIT %s OFFSET %s"
         params = (agency, limit + 1, offset)
     else:
-        query = "SELECT * FROM vw_unified_matched_enrollment LIMIT %s OFFSET %s"
+        query = "SELECT * FROM vw_unified_matched_enrollment ORDER BY agency_name ASC, tuloy_id ASC LIMIT %s OFFSET %s"
         params = (limit + 1, offset)
     
     try:
