@@ -48,7 +48,7 @@ def match_user(user: UserInput, current_user: dict = Depends(get_current_user), 
     try:
         # 2. Query the source table
         select_query = r"""
-            SELECT * FROM vw_verify_member_bene 
+            SELECT tuloy_id, member_id FROM vw_verify_member_bene 
             WHERE match_keys = %s
         """
         query_params = [match_keys_bytes]
