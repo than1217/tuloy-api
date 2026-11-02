@@ -275,7 +275,7 @@ Use `next_offset` as the `offset` for the next request while `has_more` is `true
 ### 6. `POST /PostEnrolleeMatchedCHED`
 *(Requires ****** authentication)*
 
-Receives CHED match data payload and persists it to the `matching_transaction_CHED_tbl` and `enroll_matched_CHED_tbl` tables.
+Receives CHED match data payload and persists it to the `matching_transaction_CHED_tbl` and `enroll_matched_CHED_tbl` tables. A `tuloy_id` (`id` or `member_id` inside `data`) is strictly required even when the record is not found (i.e. `status: false`).
 
 **Headers:**
 ```http
@@ -322,6 +322,7 @@ Content-Type: application/json
   }
   ```
 - **`401 Unauthorized`:** Missing, invalid, or expired ******
+- **`422 Unprocessable Entity`:** Missing `tuloy_id` inside `data`, even for unmatched records.
 - **`500 Internal Server Error`:** Database connection or query execution failure.
 
 ---
@@ -379,7 +380,7 @@ Authorization: ******
 ### 8. `POST /PostEnrolleeMatchedTESDA`
 *(Requires ****** authentication)*
 
-Receives TESDA match data payload and persists it to the `matching_transaction_TESDA_tbl` and `enroll_matched_TESDA_tbl` tables.
+Receives TESDA match data payload and persists it to the `matching_transaction_TESDA_tbl` and `enroll_matched_TESDA_tbl` tables. A `tuloy_id` (`id` inside `data`) is strictly required even when the record is not found (i.e. `status: false`).
 
 **Headers:**
 ```http
@@ -431,6 +432,7 @@ Content-Type: application/json
   }
   ```
 - **`401 Unauthorized`:** Missing, invalid, or expired ******
+- **`422 Unprocessable Entity`:** Missing `tuloy_id` inside `data` (or other data validation errors).
 - **`500 Internal Server Error`:** Database connection or query execution failure.
 
 ---
