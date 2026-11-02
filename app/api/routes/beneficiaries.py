@@ -1,6 +1,6 @@
 import hashlib
 import re
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.encoders import jsonable_encoder
 from mysql.connector import Error
 from typing import Optional
@@ -11,13 +11,40 @@ from app.core.logging_config import configure_logging
 from app.schemas.schemas import UserInput, ChedResponsePayload, MothersMaiden, Degree, TesdaResponsePayload
 from app.core.security import get_current_user
 from fastapi_cache.decorator import cache
+from fastapi_cache import FastAPICache
 
 logger = configure_logging()
 
 router = APIRouter(tags=['Beneficiaries'])
 
+def _get_cache_key(func, namespace: str = "", request: Request = None, response: Response = None, *args, **kwargs):
+    """
+    Custom cache key builder that completely ignores the `db` and `current_user` objects
+    (which change memory addresses every request), and builds the key using the URL, 
+    query parameters, and request body (for POSTs).
+    """
+    key_parts = [
+        namespace,
+        request.method.lower(),
+        request.url.path,
+        repr(sorted(request.query_params.items()))
+    ]
+    
+    # If there is a Pydantic body (e.g., UserInput), it gets passed into kwargs. 
+    # We want to include its data in the hash, while stripping out the dependencies.
+    clean_kwargs = {}
+    for k, v in kwargs.get("kwargs", {}).items():
+        if k not in ["db", "current_user"]:
+            if hasattr(v, "model_dump_json"):
+                clean_kwargs[k] = v.model_dump_json()
+            else:
+                clean_kwargs[k] = str(v)
+                
+    key_parts.append(repr(sorted(clean_kwargs.items())))
+    return ":".join(key_parts)
+
 @router.post("/VerifyMemberBene")
-@cache(expire=86400) # Cache for 24 hours
+@cache(expire=86400, key_builder=_get_cache_key) # Cache for 24 hours
 def match_user(user: UserInput, current_user: dict = Depends(get_current_user), db = Depends(get_db_connection)):
     cursor = db.cursor(dictionary=True)
     
@@ -87,7 +114,7 @@ def match_user(user: UserInput, current_user: dict = Depends(get_current_user), 
 
 
 @router.get("/GetEligibleBene")
-@cache(expire=86400) # Cache for 24 hours (86400 seconds)
+@cache(expire=86400, key_builder=_get_cache_key) # Cache for 24 hours
 def get_eligible_bene(
     current_user: dict = Depends(get_current_user),
     db=Depends(get_db_connection),
