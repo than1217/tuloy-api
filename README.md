@@ -245,8 +245,8 @@ Content-Type: application/json
 Returns one page of records from `vw_verify_member_bene` to avoid loading the entire dataset into memory or sending millions of rows in one response.
 
 **Query parameters:**
-- `limit` (optional, default `100`, maximum `1000`): Number of records to return.
-- `offset` (optional, default `0`): Number of records to skip before returning the page.
+- `limit` (optional, default `1000`, maximum `5000`): Number of records to return.
+- `last_tuloy_id` (optional): The `tuloy_id` of the last record from the previous page. Leave empty for the first page.
 
 **Headers:**
 ```http
@@ -257,13 +257,12 @@ Authorization: ******
 ```json
 {
   "items": [],
-  "limit": 100,
-  "offset": 0,
+  "limit": 1000,
   "has_more": true,
-  "next_offset": 100
+  "next_cursor": "4Ps-12345"
 }
 ```
-Use `next_offset` as the `offset` for the next request while `has_more` is `true`. The endpoint does not calculate a total count, avoiding an additional potentially expensive query.
+Use `next_cursor` as the `last_tuloy_id` parameter for the next request while `has_more` is `true`. The endpoint uses keyset/cursor pagination so performance remains fast regardless of page depth.
 
 **Responses:**
 - **`200 OK`:** One page of eligible beneficiary records and pagination metadata.
@@ -333,8 +332,8 @@ Content-Type: application/json
 Returns paginated records directly from the `enroll_matched_CHED_tbl` table containing the imported CHED matches.
 
 **Query parameters:**
-- `limit` (optional, default `100`, maximum `1000`): Number of records to return.
-- `offset` (optional, default `0`): Number of records to skip before returning the page.
+- `limit` (optional, default `1000`, maximum `5000`): Number of records to return.
+- `last_id` (optional): The `id` of the last record from the previous page. Leave empty for the first page.
 
 **Headers:**
 ```http
@@ -368,10 +367,9 @@ Authorization: ******
       "updated_at": null
     }
   ],
-  "limit": 100,
-  "offset": 0,
+  "limit": 1000,
   "has_more": false,
-  "next_offset": null
+  "next_cursor": null
 }
 ```
 
@@ -443,8 +441,8 @@ Content-Type: application/json
 Returns paginated records directly from the `enroll_matched_TESDA_tbl` table containing the imported TESDA matches.
 
 **Query parameters:**
-- `limit` (optional, default `100`, maximum `1000`): Number of records to return.
-- `offset` (optional, default `0`): Number of records to skip before returning the page.
+- `limit` (optional, default `1000`, maximum `5000`): Number of records to return.
+- `last_id` (optional): The `id` of the last record from the previous page. Leave empty for the first page.
 
 **Headers:**
 ```http
@@ -486,10 +484,9 @@ Authorization: ******
       "updated_at": null
     }
   ],
-  "limit": 100,
-  "offset": 0,
+  "limit": 1000,
   "has_more": false,
-  "next_offset": null
+  "next_cursor": null
 }
 ```
 

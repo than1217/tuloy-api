@@ -243,24 +243,31 @@ def record_tesda_response(
 def get_matched_ched_records(
     current_user: dict = Depends(get_current_user),
     db=Depends(get_db_connection),
-    limit: int = Query(100, ge=1, le=1000),
-    offset: int = Query(0, ge=0),
+    limit: int = Query(1000, ge=1, le=5000),
+    last_id: Optional[int] = Query(None, description="The id of the last record from the previous page"),
 ):
     cursor = db.cursor(dictionary=True)
     try:
-        cursor.execute(
-            "SELECT * FROM vw_get_matched_CHED ORDER BY tuloy_id ASC LIMIT %s OFFSET %s",
-            (limit + 1, offset),
-        )
+        if last_id is not None:
+            query = "SELECT * FROM vw_get_matched_CHED WHERE id > %s ORDER BY id ASC LIMIT %s"
+            params = (last_id, limit + 1)
+        else:
+            query = "SELECT * FROM vw_get_matched_CHED ORDER BY id ASC LIMIT %s"
+            params = (limit + 1,)
+            
+        cursor.execute(query, params)
         rows = cursor.fetchall()
         has_more = len(rows) > limit
+        actual_rows = rows[:limit]
+        
+        next_cursor = actual_rows[-1]["id"] if has_more and actual_rows else None
+        
         return jsonable_encoder(
             {
-                "items": rows[:limit],
+                "items": actual_rows,
                 "limit": limit,
-                "offset": offset,
                 "has_more": has_more,
-                "next_offset": offset + limit if has_more else None,
+                "next_cursor": next_cursor,
             },
             custom_encoder={bytes: lambda value: value.hex()}
         )
@@ -275,34 +282,40 @@ def get_matched_ched_records(
 def get_matched_tesda_records(
     current_user: dict = Depends(get_current_user),
     db=Depends(get_db_connection),
-    limit: int = Query(100, ge=1, le=1000),
-    offset: int = Query(0, ge=0),
+    limit: int = Query(1000, ge=1, le=5000),
+    last_id: Optional[int] = Query(None, description="The id of the last record from the previous page"),
 ):
     cursor = db.cursor(dictionary=True)
     try:
-        cursor.execute(
-            "SELECT * FROM vw_get_matched_TESDA ORDER BY tuloy_id ASC LIMIT %s OFFSET %s",
-            (limit + 1, offset),
-        )
+        if last_id is not None:
+            query = "SELECT * FROM vw_get_matched_TESDA WHERE id > %s ORDER BY id ASC LIMIT %s"
+            params = (last_id, limit + 1)
+        else:
+            query = "SELECT * FROM vw_get_matched_TESDA ORDER BY id ASC LIMIT %s"
+            params = (limit + 1,)
+            
+        cursor.execute(query, params)
         rows = cursor.fetchall()
         has_more = len(rows) > limit
+        actual_rows = rows[:limit]
         
         # Parse JSON fields (now coming from enrollment_details in the view)
         import json
-        for row in rows:
+        for row in actual_rows:
             if row.get('enrollment_details') and isinstance(row['enrollment_details'], str):
                 try:
                     row['enrollment_details'] = json.loads(row['enrollment_details'])
                 except json.JSONDecodeError:
                     pass
 
+        next_cursor = actual_rows[-1]["id"] if has_more and actual_rows else None
+
         return jsonable_encoder(
             {
-                "items": rows[:limit],
+                "items": actual_rows,
                 "limit": limit,
-                "offset": offset,
                 "has_more": has_more,
-                "next_offset": offset + limit if has_more else None,
+                "next_cursor": next_cursor,
             },
             custom_encoder={bytes: lambda value: value.hex()}
         )
