@@ -7,6 +7,11 @@ from contextlib import asynccontextmanager
 import mysql.connector
 from mysql.connector import Error
 
+# Redis and caching imports
+from fastapi_cache import FastAPICache
+from fastapi_cache.backends.redis import RedisBackend
+from redis import asyncio as aioredis
+
 from app.db import database
 from app.db.database import get_db_config
 from app.core.logging_config import configure_logging
@@ -153,6 +158,16 @@ async def lifespan(app: FastAPI):
                 cursor.close()
             if conn:
                 conn.close()
+                
+        # Initialize Redis Cache
+        try:
+            redis_host = os.getenv("REDIS_HOST", "localhost")
+            redis_port = os.getenv("REDIS_PORT", 6379)
+            redis = aioredis.from_url(f"redis://{redis_host}:{redis_port}", encoding="utf8", decode_responses=True)
+            FastAPICache.init(RedisBackend(redis), prefix="fastapi-cache")
+            logger.info(f"Redis cache initialized at {redis_host}:{redis_port}")
+        except Exception as e:
+            logger.warning(f"Could not connect to Redis, caching may be disabled: {e}")
 
         logger.info("API started")
         yield

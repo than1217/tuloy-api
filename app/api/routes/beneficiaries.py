@@ -10,12 +10,14 @@ from app.db.database import get_db_connection
 from app.core.logging_config import configure_logging
 from app.schemas.schemas import UserInput, ChedResponsePayload, MothersMaiden, Degree, TesdaResponsePayload
 from app.core.security import get_current_user
+from fastapi_cache.decorator import cache
 
 logger = configure_logging()
 
 router = APIRouter(tags=['Beneficiaries'])
 
 @router.post("/VerifyMemberBene")
+@cache(expire=86400) # Cache for 24 hours
 def match_user(user: UserInput, current_user: dict = Depends(get_current_user), db = Depends(get_db_connection)):
     cursor = db.cursor(dictionary=True)
     
@@ -85,6 +87,7 @@ def match_user(user: UserInput, current_user: dict = Depends(get_current_user), 
 
 
 @router.get("/GetEligibleBene")
+@cache(expire=86400) # Cache for 24 hours (86400 seconds)
 def get_eligible_bene(
     current_user: dict = Depends(get_current_user),
     db=Depends(get_db_connection),
