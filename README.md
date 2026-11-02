@@ -246,7 +246,7 @@ Returns one page of records from `vw_verify_member_bene` to avoid loading the en
 
 **Query parameters:**
 - `limit` (optional, default `1000`, maximum `5000`): Number of records to return.
-- `last_member_id` (optional): The `member_id` of the last record from the previous page. Leave empty for the first page.
+- `offset` (optional, default `0`): Number of records to skip before returning the page.
 
 **Headers:**
 ```http
@@ -258,11 +258,12 @@ Authorization: ******
 {
   "items": [],
   "limit": 1000,
+  "offset": 0,
   "has_more": true,
-  "next_cursor": 12345678
+  "next_offset": 1000
 }
 ```
-Use `next_cursor` as the `last_member_id` parameter for the next request while `has_more` is `true`. The endpoint uses keyset/cursor pagination so performance remains fast regardless of page depth.
+Use `next_offset` as the `offset` for the next request while `has_more` is `true`. The endpoint does not calculate a total count, avoiding an additional potentially expensive query.
 
 **Responses:**
 - **`200 OK`:** One page of eligible beneficiary records and pagination metadata.

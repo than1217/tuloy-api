@@ -9,6 +9,7 @@ from app.core.logging_config import configure_logging
 from app.schemas.schemas import UserInput, ChedResponsePayload, MothersMaiden, Degree, TesdaResponsePayload
 from app.core.security import get_current_user
 
+logger = configure_logging()
 
 router = APIRouter(tags=['Matching'])
 

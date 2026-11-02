@@ -11,6 +11,7 @@ from app.core.logging_config import configure_logging
 from app.schemas.schemas import UserInput, ChedResponsePayload, MothersMaiden, Degree, TesdaResponsePayload
 from app.core.security import get_current_user
 
+logger = configure_logging()
 
 router = APIRouter(tags=['Beneficiaries'])
 
@@ -88,45 +89,31 @@ def get_eligible_bene(
     current_user: dict = Depends(get_current_user),
     db=Depends(get_db_connection),
     limit: int = Query(1000, ge=1, le=5000),
-    last_member_id: Optional[int] = Query(None, description="The member_id of the last record from the previous page"),
+    offset: int = Query(0, ge=0),
 ):
     cursor = db.cursor(dictionary=True)
     try:
-        if last_member_id is not None:
-            query = """
-                SELECT `first_name`,`middle_name`,`last_name`,
-                `date_of_birth`,`sex_id`,`member_id`,`listahanan_id`,
-                `lrn`,`philsys`,`grade_level`,
-                `region_name`,`barangay_name`,`client_status`,`roster_status`, `tuloy_id` 
-                FROM vw_unmatched_member_bene 
-                WHERE `member_id` > %s
-                ORDER BY `member_id` ASC 
-                LIMIT %s"""
-            params = (last_member_id, limit + 1)
-        else:
-            query = """
-                SELECT `first_name`,`middle_name`,`last_name`,
-                `date_of_birth`,`sex_id`,`member_id`,`listahanan_id`,
-                `lrn`,`philsys`,`grade_level`,
-                `region_name`,`barangay_name`,`client_status`,`roster_status`, `tuloy_id` 
-                FROM vw_unmatched_member_bene 
-                ORDER BY `member_id` ASC 
-                LIMIT %s"""
-            params = (limit + 1,)
+        query = """
+            SELECT `first_name`,`middle_name`,`last_name`,
+            `date_of_birth`,`sex_id`,`member_id`,`listahanan_id`,
+            `lrn`,`philsys`,`grade_level`,
+            `region_name`,`barangay_name`,`client_status`,`roster_status`, `tuloy_id` 
+            FROM vw_unmatched_member_bene 
+            LIMIT %s OFFSET %s"""
+        params = (limit + 1, offset)
 
         cursor.execute(query, params)
         rows = cursor.fetchall()
         has_more = len(rows) > limit
         actual_rows = rows[:limit]
-        
-        next_cursor = actual_rows[-1]["member_id"] if has_more and actual_rows else None
 
         return jsonable_encoder(
             {
                 "items": actual_rows,
                 "limit": limit,
+                "offset": offset,
                 "has_more": has_more,
-                "next_cursor": next_cursor,
+                "next_offset": offset + limit if has_more else None,
             },
             custom_encoder={bytes: lambda value: value.hex()},
         )
@@ -141,8 +128,7 @@ def get_eligible_bene(
 def get_validated_enrollees(
     agency: Optional[str] = Query(None, description="Filter by agency (CHED or TESDA)"),
     limit: int = Query(1000, ge=1, le=5000),
-    last_agency: Optional[str] = Query(None, description="Cursor: agency_name of the last record from the previous page"),
-    last_member_id: Optional[int] = Query(None, description="Cursor: member_id of the last record from the previous page"),
+    offset: int = Query(0, ge=0),
     current_user: dict = Depends(get_current_user),
     db = Depends(get_db_connection)
 ):
@@ -157,19 +143,11 @@ def get_validated_enrollees(
         if agency not in ["CHED", "TESDA"]:
             raise HTTPException(status_code=400, detail="Agency must be either CHED or TESDA")
             
-        if last_member_id is not None:
-            query = "SELECT * FROM vw_unified_matched_enrollment WHERE agency_name = %s AND member_id > %s ORDER BY member_id ASC LIMIT %s"
-            params = (agency, last_member_id, limit + 1)
-        else:
-            query = "SELECT * FROM vw_unified_matched_enrollment WHERE agency_name = %s ORDER BY member_id ASC LIMIT %s"
-            params = (agency, limit + 1)
+        query = "SELECT * FROM vw_unified_matched_enrollment WHERE agency_name = %s LIMIT %s OFFSET %s"
+        params = (agency, limit + 1, offset)
     else:
-        if last_agency and last_member_id is not None:
-            query = "SELECT * FROM vw_unified_matched_enrollment WHERE (agency_name, member_id) > (%s, %s) ORDER BY agency_name ASC, member_id ASC LIMIT %s"
-            params = (last_agency, last_member_id, limit + 1)
-        else:
-            query = "SELECT * FROM vw_unified_matched_enrollment ORDER BY agency_name ASC, member_id ASC LIMIT %s"
-            params = (limit + 1,)
+        query = "SELECT * FROM vw_unified_matched_enrollment LIMIT %s OFFSET %s"
+        params = (limit + 1, offset)
     
     try:
         cursor.execute(query, params)
@@ -207,20 +185,13 @@ def get_validated_enrollees(
                 "updated_at": str(row.get('updated_at')) if row.get('updated_at') else None
             })
             
-        next_cursor = None
-        if has_more and response_data:
-            last_item = response_data[-1]
-            next_cursor = {
-                "last_agency": last_item["agency_name"],
-                "last_member_id": last_item["member_id"]
-            }
-            
         return {
             "status": True, 
             "data": response_data,
             "limit": limit,
+            "offset": offset,
             "has_more": has_more,
-            "next_cursor": next_cursor
+            "next_offset": offset + limit if has_more else None
         }
         
     except Error as e:
