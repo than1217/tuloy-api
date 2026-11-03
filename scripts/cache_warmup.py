@@ -36,7 +36,7 @@ def refresh_token(ref_token):
 def warmup_cache(access_token, refresh_tok):
     headers = {"Authorization": f"Bearer {access_token}"}
     offset = 0
-    limit = 5000
+    limit = 1000
 
     print(f"Warming up cache for /GetEligibleBene (batch size: {limit})...")
     

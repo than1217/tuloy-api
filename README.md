@@ -248,6 +248,10 @@ Returns one page of records from `vw_verify_member_bene` to avoid loading the en
 - `limit` (optional, default `1000`, maximum `5000`): Number of records to return.
 - `offset` (optional, default `0`): Number of records to skip before returning the page.
 
+Responses are cached for 24 hours by the effective `limit` and `offset`. Omitting
+these parameters is equivalent to explicitly sending their defaults; requesting
+a different page size or offset uses a separate cache entry.
+
 **Headers:**
 ```http
 Authorization: ******

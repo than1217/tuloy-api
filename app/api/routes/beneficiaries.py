@@ -27,11 +27,10 @@ def _get_cache_key(func, namespace: str = "", request: Request = None, response:
         namespace,
         request.method.lower(),
         request.url.path,
-        repr(sorted(request.query_params.items()))
     ]
     
-    # If there is a Pydantic body (e.g., UserInput), it gets passed into kwargs. 
-    # We want to include its data in the hash, while stripping out the dependencies.
+    # FastAPI resolves defaults before calling the endpoint, so these values
+    # canonicalize omitted and explicitly supplied default query parameters.
     clean_kwargs = {}
     for k, v in kwargs.get("kwargs", {}).items():
         if k not in ["db", "current_user"]:
@@ -229,4 +228,3 @@ def get_validated_enrollees(
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     finally:
         cursor.close()
-
