@@ -161,13 +161,25 @@ async def lifespan(app: FastAPI):
                 
         # Initialize Redis Cache
         try:
-            redis_host = os.getenv("REDIS_HOST", "localhost")
-            redis_port = os.getenv("REDIS_PORT", 6379)
-            redis = aioredis.from_url(f"redis://{redis_host}:{redis_port}", encoding="utf8", decode_responses=True)
+            redis_url = os.getenv("REDIS_URL")
+            if redis_url:
+                redis = aioredis.from_url(redis_url, decode_responses=False)
+                redis_target = redis_url.split("@")[-1]
+            else:
+                redis_host = os.getenv("REDIS_HOST", "localhost")
+                redis_port = os.getenv("REDIS_PORT", 6379)
+                redis = aioredis.from_url(
+                    f"redis://{redis_host}:{redis_port}", decode_responses=False
+                )
+                redis_target = f"{redis_host}:{redis_port}"
+
             FastAPICache.init(RedisBackend(redis), prefix="fastapi-cache")
-            logger.info(f"Redis cache initialized at {redis_host}:{redis_port}")
+            await redis.ping()
+            logger.info("Redis cache initialized at %s", redis_target)
         except Exception as e:
-            logger.warning(f"Could not connect to Redis, caching may be disabled: {e}")
+            logger.exception(
+                "Could not connect to Redis; cache requests may continue to miss: %s", e
+            )
 
         logger.info("API started")
         yield
