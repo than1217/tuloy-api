@@ -31,7 +31,7 @@ class Degree(BaseModel):
     semester: Optional[int] = None
 
 class ChedData(BaseModel):
-    id: Optional[str] = None
+    id: str
     member_id: Optional[int] = None
     student_id: Optional[int] = None
     mothers_maiden: Optional[MothersMaiden] = None
@@ -54,7 +54,7 @@ class ShortCourse(BaseModel):
     training_status: Optional[str] = None
 
 class TesdaData(BaseModel):
-    id: Optional[str] = None
+    id: str
     member_id: Optional[int] = None
     uli: Optional[str] = None
     mothers_maiden: Optional[MothersMaiden] = None
