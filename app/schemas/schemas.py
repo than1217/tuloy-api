@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 
 class UserCreate(BaseModel):
@@ -31,7 +31,7 @@ class Degree(BaseModel):
     semester: Optional[int] = None
 
 class ChedData(BaseModel):
-    id: str
+    id: str = Field(..., pattern="^4Ps-", description="TULOY ID must start with '4Ps-'")
     member_id: Optional[int] = None
     student_id: Optional[int] = None
     mothers_maiden: Optional[MothersMaiden] = None
@@ -54,7 +54,7 @@ class ShortCourse(BaseModel):
     training_status: Optional[str] = None
 
 class TesdaData(BaseModel):
-    id: str
+    id: str = Field(..., pattern="^4Ps-", description="TULOY ID must start with '4Ps-'")
     member_id: Optional[int] = None
     uli: Optional[str] = None
     mothers_maiden: Optional[MothersMaiden] = None
