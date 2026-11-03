@@ -259,6 +259,10 @@ def process_row_task(row, client, args):
         # Posting Step
         if args.verify_only:
             return v_succ, p_succ, fail
+            
+        if args.repost:
+            row["TESDA POST STATUS"] = ""
+            
         if (row.get("TESDA POST STATUS") or "").strip() == "SUCCESS":
             return v_succ, p_succ, fail
         if not (row.get("VERIFY STATUS") or "").strip():
@@ -335,6 +339,11 @@ def main(argv=None):
         "--reverify",
         action="store_true",
         help="Re-run verification even when the CSV already has a VERIFY STATUS",
+    )
+    parser.add_argument(
+        "--repost",
+        action="store_true",
+        help="Re-run TESDA submission even when the CSV already has a TESDA POST STATUS of SUCCESS",
     )
     args = parser.parse_args(argv)
 
