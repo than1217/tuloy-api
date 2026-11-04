@@ -112,6 +112,76 @@ def match_user(user: UserInput, current_user: dict = Depends(get_current_user), 
         cursor.close()
 
 
+@router.post("/Verify4psBene")
+@cache(expire=86400, key_builder=_get_cache_key) # Cache for 24 hours
+def verify_4ps_bene(user: UserInput, current_user: dict = Depends(get_current_user), db = Depends(get_db_connection)):
+    cursor = db.cursor(dictionary=True)
+    
+    # 1. Compute match_keys hash in Python
+    fn = re.sub(r'\s+', ' ', user.first_name).strip().upper()
+    ln = re.sub(r'\s+', ' ', user.last_name).strip().upper()
+    dob = user.date_of_birth
+    
+    concat_str = f"{fn}/{ln}/{dob}"
+    match_keys_bytes = hashlib.md5(concat_str.encode('utf-8')).digest()
+
+    optional_filters = {
+        "middle_name": user.middle_name,
+        "sex": user.sex,
+        "member_id": user.member_id,
+        "household_id": user.household_id,
+        "lrn": user.lrn,
+        "pcn": user.pcn,
+        "geocode": user.geocode,
+    }
+    optional_filter_columns = {
+        "middle_name": "middle_name",
+        "sex": "sex_id",
+        "member_id": "member_id",
+        "household_id": "listahanan_id",
+        "lrn": "lrn",
+        "pcn": "philsys",
+        "geocode": "bgy_psgc_code",
+    }
+    
+    try:
+        # 2. Query the source table
+        select_query = r"""
+            SELECT tuloy_id, member_id FROM vw_verify_4ps_bene 
+            WHERE match_keys = %s
+        """
+        query_params = [match_keys_bytes]
+        for field, value in optional_filters.items():
+            if value is not None:
+                select_query += f" AND {optional_filter_columns[field]} = %s"
+                query_params.append(value)
+
+        cursor.execute(select_query, tuple(query_params))
+        results = cursor.fetchall()
+        
+        row_count = len(results)
+        
+        # 3. Check the conditions
+        if row_count == 0:
+            return {"status": "Not Found", "tuloy_id": None, "member_id": None}
+            
+        elif row_count >= 2:
+            return {"status": "Multiple Match Found", "tuloy_id": None, "member_id": None}
+            
+        elif row_count == 1:
+            return {
+                "status": "Matched",
+                "tuloy_id": results[0].get("tuloy_id"),
+                "member_id": results[0].get("member_id"),
+            }
+            
+    except Error as e:
+        logger.exception("Database error during 4Ps beneficiary verification")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        cursor.close()
+
+
 @router.get("/GetEligibleBene")
 @cache(expire=86400, key_builder=_get_cache_key) # Cache for 24 hours
 def get_eligible_bene(

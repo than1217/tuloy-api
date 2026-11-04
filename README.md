@@ -229,6 +229,66 @@ Content-Type: application/json
   ```json
   {
     "status": "Matched",
+    "tuloy_id": 1234,
+    "member_id": "999-9999-99"
+  }
+  ```
+
+---
+
+### 5. `POST /Verify4psBene`
+*(Requires ****** authentication)*
+
+Receives user details, computes an MD5 hash, and queries `vw_verify_4ps_bene`.
+
+**Headers:**
+```http
+Authorization: ******
+Content-Type: application/json
+```
+
+**Request Body:**
+
+```json
+{
+  "first_name": "John",
+  "middle_name": "Quincy",
+  "last_name": "Doe",
+  "date_of_birth": "1990-01-15",
+  "sex": "Male",
+  "member_id": "123456",
+  "household_id": "789012",
+  "lrn": "100000000001",
+  "pcn": "1234567890123456",
+  "geocode": "123456789"
+}
+```
+
+- **Required Fields:** `first_name`, `last_name`, `date_of_birth`
+- **Optional Fields:** `middle_name`, `sex`, `member_id`, `household_id`, `lrn`, `pcn`, `geocode` (used as exact-match filters; `sex` maps to `sex_id`, `household_id` to `listahanan_id`, `pcn` to `philsys`, and `geocode` to `bgy_psgc_code` in `vw_verify_4ps_bene`).
+
+**Responses:**
+
+- **`200 OK` - Not Found:**
+  ```json
+  {
+    "status": "Not Found",
+    "tuloy_id": null,
+    "member_id": null
+  }
+  ```
+- **`200 OK` - Multiple Matches:**
+  ```json
+  {
+    "status": "Multiple Match Found",
+    "tuloy_id": null,
+    "member_id": null
+  }
+  ```
+- **`200 OK` - Matched:**
+  ```json
+  {
+    "status": "Matched",
     "tuloy_id": "123456",
     "member_id": 789012
   }
