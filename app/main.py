@@ -173,13 +173,21 @@ async def lifespan(app: FastAPI):
                 )
                 redis_target = f"{redis_host}:{redis_port}"
 
-            FastAPICache.init(RedisBackend(redis), prefix="fastapi-cache")
-            await redis.ping()
-            logger.info("Redis cache initialized at %s", redis_target)
+            # Only initialize FastAPICache but don't crash the app if redis is down
+            try:
+                await redis.ping()
+                FastAPICache.init(RedisBackend(redis), prefix="fastapi-cache")
+                logger.info("Redis cache initialized at %s", redis_target)
+            except Exception as e:
+                # Setup dummy cache backend to prevent application crashes
+                from fastapi_cache.backends.inmemory import InMemoryBackend
+                FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
+                logger.warning(
+                    "Could not connect to Redis at %s, using InMemory cache instead. Error: %s", 
+                    redis_target, e
+                )
         except Exception as e:
-            logger.exception(
-                "Could not connect to Redis; cache requests may continue to miss: %s", e
-            )
+            logger.exception("Failed to configure caching: %s", e)
 
         logger.info("API started")
         yield
