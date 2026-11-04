@@ -158,76 +158,8 @@ def verify_payload(row):
         raise ValueError("FIRST NAME and LAST NAME are required")
     return payload
 
-def tesda_payload(row):
-    verified = (row.get("VERIFY STATUS") or "").strip()
-    if verified not in ("Matched", "Not Found", "Multiple Match Found"):
-        raise ValueError(f"Unexpected verification status: {verified!r}")
-    matched = verified == "Matched"
-    
-    tuloy_id = (row.get("TULOY ID") or row.get("HHID") or "").strip()
-
-    data = None
-    if matched:
-        if not tuloy_id:
-            raise ValueError("Verification says Matched but TULOY ID is empty")
-        if len(tuloy_id) > 50:
-            raise ValueError("TULOY ID exceeds the database limit of 50 characters")
-
-        member_id_value = (row.get("MEMBER ID") or "").strip()
-        if not member_id_value:
-            raise ValueError("Verification says Matched but MEMBER ID is empty")
-        try:
-            member_id = int(member_id_value)
-        except ValueError as error:
-            raise ValueError("MEMBER ID must be an unsigned integer") from error
-        if not 1 <= member_id <= 4294967295:
-            raise ValueError("MEMBER ID must be between 1 and 4294967295")
-        uli = (row.get("ULI") or "").strip() or None
-        if uli and len(uli) > 50:
-            raise ValueError("ULI exceeds the database limit of 50 characters")
-        
-        qualification = (row.get("QUALIFICATION") or "").strip()
-        start_date = (row.get("START DATE") or "").strip()
-        end_date = (row.get("END DATE") or "").strip()
-        training_status = (row.get("TRAINING STATUS") or "").strip()
-        
-        has_short_course = bool(qualification or start_date or end_date or training_status)
-        short_course_data = None
-        
-        if has_short_course:
-            short_course_data = {
-                "program_name": qualification or None,
-                "start_date": parse_optional_date(start_date, "START DATE"),
-                "end_date": parse_optional_date(end_date, "END DATE"),
-                "training_status": training_status or None,
-            }
-        
-        data = {
-            "id": tuloy_id,
-            "member_id": member_id,
-            "uli": uli,
-            "mothers_maiden": None,
-            "diploma": None,
-            "short_course": short_course_data,
-            "enrollment_status": None,
-            "date_encoded": None,
-            "date_updated": None,
-        }
-    else:
-        if tuloy_id:
-            data = {"id": tuloy_id}
-
-    message = "FOUND" if matched else verified.upper()
-    return {
-        "status": matched,
-        "message": message,
-        "data": data,
-        "error_code": None,
-        "enrollment_id": 0,
-    }
-
 def process_row_task(row, client, args):
-    v_succ, p_succ, fail = 0, 0, 0
+    v_succ, fail = 0, 0
     try:
         # Verification Step
         if args.reverify or not (row.get("VERIFY STATUS") or "").strip():
@@ -235,7 +167,8 @@ def process_row_task(row, client, args):
                 row["VERIFY STATUS"] = ""
                 row["TULOY ID"] = ""
                 row["MEMBER ID"] = ""
-                row["TESDA POST STATUS"] = ""
+                row["CLIENT STATUS"] = ""
+                row["ROSTER STATUS"] = ""
             try:
                 result = client.post_json("/Verify4psBene", verify_payload(row))
                 status = result.get("status")
@@ -250,41 +183,19 @@ def process_row_task(row, client, args):
                 member_id = result.get("member_id")
                 row["TULOY ID"] = "" if tuloy_id is None else str(tuloy_id)
                 row["MEMBER ID"] = "" if member_id is None else str(member_id)
+                row["CLIENT STATUS"] = result.get("client_status") or ""
+                row["ROSTER STATUS"] = result.get("roster_status") or ""
                 row["IMPORT ERROR"] = ""
                 v_succ = 1
             except (ApiRequestError, RequestTimeout, RuntimeError, ValueError, KeyError) as error:
                 row["IMPORT ERROR"] = f"Verification failed: {error}"
                 fail = 1
-                return v_succ, p_succ, fail
-
-        # Posting Step
-        if args.verify_only:
-            return v_succ, p_succ, fail
-            
-        if args.repost:
-            row["TESDA POST STATUS"] = ""
-            
-        if (row.get("TESDA POST STATUS") or "").strip() == "SUCCESS":
-            return v_succ, p_succ, fail
-        if not (row.get("VERIFY STATUS") or "").strip():
-            return v_succ, p_succ, fail
-
-        try:
-            payload = tesda_payload(row)
-            client.post_json("/PostEnrolleeMatchedTESDA", payload)
-            row["TESDA POST STATUS"] = "SUCCESS"
-            row["IMPORT ERROR"] = ""
-            p_succ = 1
-        except (ApiRequestError, RequestTimeout, RuntimeError, ValueError, KeyError) as error:
-            row["TESDA POST STATUS"] = "FAILED"
-            row["IMPORT ERROR"] = f"TESDA submission failed: {error}"
-            fail = 1
 
     except Exception as e:
         row["IMPORT ERROR"] = f"Unexpected error: {e}"
         fail = 1
 
-    return v_succ, p_succ, fail
+    return v_succ, fail
 
 def _process_and_write_chunk(chunk, client, args, writer, target_file, pbar, stats):
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
