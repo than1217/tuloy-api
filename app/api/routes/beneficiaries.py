@@ -43,7 +43,6 @@ def _get_cache_key(func, namespace: str = "", request: Request = None, response:
     return ":".join(key_parts)
 
 @router.post("/VerifyTuloyBene", summary="Verify Tuloy Beneficiary")
-@cache(expire=86400, key_builder=_get_cache_key) # Cache for 24 hours
 def match_user(user: UserInput, current_user: dict = Depends(get_current_user), db = Depends(get_db_connection)):
     cursor = db.cursor(dictionary=True)
     
@@ -113,7 +112,6 @@ def match_user(user: UserInput, current_user: dict = Depends(get_current_user), 
 
 
 @router.post("/Verify4psBene", summary="Verify 4Ps Beneficiary")
-@cache(expire=86400, key_builder=_get_cache_key) # Cache for 24 hours
 def verify_4ps_bene(user: UserInput, current_user: dict = Depends(get_current_user), db = Depends(get_db_connection)):
     cursor = db.cursor(dictionary=True)
     
