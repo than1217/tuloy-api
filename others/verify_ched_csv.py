@@ -25,7 +25,6 @@ CHECKPOINT_COLUMNS = (
     "VERIFY STATUS",
     "CLIENT STATUS",
     "ROSTER STATUS",
-    "CHED POST STATUS",
     "IMPORT ERROR",
 )
 
@@ -163,68 +162,8 @@ def verify_payload(row):
     }
 
 
-def ched_payload(row):
-    verified = (row.get("VERIFY STATUS") or "").strip()
-    if verified not in VERIFY_STATUS_VALUES:
-        raise ValueError(f"Unexpected verification status: {verified!r}")
-    is_match = verified == "Matched"
-
-    try:
-        year_level = int(row.get("Year level", 0))
-    except (TypeError, ValueError):
-        year_level = 0
-
-    tuloy_id = (row.get("TULOY ID") or row.get("dswd_member_id") or row.get("Household ID") or "").strip()
-
-    data = None
-    if is_match:
-        if not tuloy_id:
-            raise ValueError("Verification says Matched but TULOY ID is empty")
-        if len(tuloy_id) > 50:
-            raise ValueError("TULOY ID exceeds the database limit of 50 characters")
-
-        member_id_value = (row.get("MEMBER ID") or "").strip()
-        if not member_id_value:
-            raise ValueError("Verification says Matched but MEMBER ID is empty")
-        try:
-            member_id = int(member_id_value)
-        except ValueError as error:
-            raise ValueError("MEMBER ID must be an unsigned integer") from error
-        if not 1 <= member_id <= 4294967295:
-            raise ValueError("MEMBER ID must be between 1 and 4294967295")
-
-        data = {
-            "id": str(tuloy_id),
-            "member_id": member_id,
-            "student_id": 0,
-            "mothers_maiden": None,
-            "degree": {
-                "program_name": row.get("Degree Program", ""),
-                "date_enrolled": None,
-                "program_duration": None,
-                "academic_year": row.get("Academic Year", ""),
-                "year_level": year_level if year_level > 0 else None,
-                "semester": 1,
-            },
-            "enrollment_status": "ENROLLED",
-            "date_encoded": None,
-            "date_updated": None,
-        }
-    else:
-        if tuloy_id:
-            data = {"id": str(tuloy_id)}
-
-    return {
-        "status": is_match,
-        "message": "FOUND" if is_match else verified.upper(),
-        "enrollment_id": 0,
-        "data": data,
-        "error_code": None,
-    }
-
-
 def process_row_task(row, client, args):
-    v_succ, p_succ, fail = 0, 0, 0
+    v_succ, fail = 0, 0
     try:
         # Verification Step
         if args.reverify or not (row.get("VERIFY STATUS") or "").strip():
@@ -234,7 +173,6 @@ def process_row_task(row, client, args):
                 row["MEMBER ID"] = ""
                 row["CLIENT STATUS"] = ""
                 row["ROSTER STATUS"] = ""
-                row["CHED POST STATUS"] = ""
             try:
                 result = client.post_json("/Verify4psBene", verify_payload(row))
                 status = result.get("status")
@@ -256,36 +194,12 @@ def process_row_task(row, client, args):
             except (ApiRequestError, RequestTimeout, RuntimeError, ValueError, KeyError) as error:
                 row["IMPORT ERROR"] = f"Verification failed: {error}"
                 fail = 1
-                return v_succ, p_succ, fail
-
-        # Posting Step
-        if args.verify_only:
-            return v_succ, p_succ, fail
-        
-        if args.repost:
-            row["CHED POST STATUS"] = ""
-
-        if (row.get("CHED POST STATUS") or "").strip() == "SUCCESS":
-            return v_succ, p_succ, fail
-        if not (row.get("VERIFY STATUS") or "").strip():
-            return v_succ, p_succ, fail
-
-        try:
-            payload = ched_payload(row)
-            client.post_json("/PostEnrolleeMatchedCHED", payload)
-            row["CHED POST STATUS"] = "SUCCESS"
-            row["IMPORT ERROR"] = ""
-            p_succ = 1
-        except (ApiRequestError, RequestTimeout, RuntimeError, ValueError, KeyError) as error:
-            row["CHED POST STATUS"] = "FAILED"
-            row["IMPORT ERROR"] = f"CHED submission failed: {error}"
-            fail = 1
 
     except Exception as e:
         row["IMPORT ERROR"] = f"Unexpected error: {e}"
         fail = 1
 
-    return v_succ, p_succ, fail
+    return v_succ, fail
 
 
 def _process_and_write_chunk(chunk, client, args, writer, target_file, pbar, stats):
@@ -293,14 +207,12 @@ def _process_and_write_chunk(chunk, client, args, writer, target_file, pbar, sta
         futures = [executor.submit(process_row_task, r, client, args) for r in chunk]
         
         for future in concurrent.futures.as_completed(futures):
-            v_succ, p_succ, fail = future.result()
+            v_succ, fail = future.result()
             stats["verify_successes"] += v_succ
-            stats["post_successes"] += p_succ
             stats["failures"] += fail
             
             pbar.set_postfix({
                 "Verified": stats["verify_successes"], 
-                "Posted": stats["post_successes"], 
                 "Errors": stats["failures"]
             })
             pbar.update(1)
@@ -335,19 +247,9 @@ def main(argv=None):
     )
     parser.add_argument("--timeout", type=float, default=30, help="Request timeout in seconds")
     parser.add_argument(
-        "--verify-only",
-        action="store_true",
-        help="Only call VerifyTuloyBene and save the IDs/statuses to the CSV",
-    )
-    parser.add_argument(
         "--reverify",
         action="store_true",
         help="Re-run verification even when the CSV already has a VERIFY STATUS",
-    )
-    parser.add_argument(
-        "--repost",
-        action="store_true",
-        help="Re-run CHED submission even when the CSV already has a CHED POST STATUS of SUCCESS",
     )
     args = parser.parse_args(argv)
 
@@ -389,7 +291,7 @@ def main(argv=None):
             return 0
 
         client = ApiClient(args.base_url, args.username, args.password, args.timeout)
-        stats = {"verify_successes": 0, "post_successes": 0, "failures": 0}
+        stats = {"verify_successes": 0, "failures": 0}
         CHUNK_SIZE = 10000
 
         # 3. Stream processing
@@ -464,7 +366,7 @@ def main(argv=None):
 
         print(
             f"Finished. Verified: {stats['verify_successes']}; "
-            f"CHED submissions: {stats['post_successes']}; failures: {stats['failures']}."
+            f"Failures: {stats['failures']}."
         )
         return 1 if stats['failures'] else 0
     except (OSError, ValueError, RuntimeError) as error:
