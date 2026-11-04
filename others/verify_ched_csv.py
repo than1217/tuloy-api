@@ -374,6 +374,8 @@ def main(argv=None):
 
         # 2. Check for temporary progress file
         temp_csv = args.csv + ".tmp"
+        output_csv = args.csv.rsplit(".", 1)[0] + " VERIFIED.csv"
+        
         processed_count = 0
         if os.path.exists(temp_csv):
             with open(temp_csv, "r", encoding="utf-8-sig") as f:
@@ -382,8 +384,8 @@ def main(argv=None):
                 processed_count = 0
                 
         if processed_count >= total_rows:
-            print("All rows already processed. Finalizing file replacement...")
-            os.replace(temp_csv, args.csv)
+            print(f"All rows already processed. Finalizing file replacement to {output_csv}...")
+            os.replace(temp_csv, output_csv)
             return 0
 
         client = ApiClient(args.base_url, args.username, args.password, args.timeout)
@@ -447,7 +449,7 @@ def main(argv=None):
         # 4. Atomic file replacement
         for attempt in range(5):
             try:
-                os.replace(temp_csv, args.csv)
+                os.replace(temp_csv, output_csv)
                 break
             except PermissionError as error:
                 if attempt < 4:
@@ -456,7 +458,7 @@ def main(argv=None):
                 winerror = getattr(error, "winerror", None)
                 windows_error = f" Windows error {winerror}." if winerror else ""
                 raise RuntimeError(
-                    f"Processing complete, but cannot update CSV checkpoint '{args.csv}'. "
+                    f"Processing complete, but cannot update CSV checkpoint '{output_csv}'. "
                     f"{windows_error} Close any preview/editor preventing replacement."
                 ) from error
 
