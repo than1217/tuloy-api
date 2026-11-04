@@ -236,7 +236,7 @@ def process_row_task(row, client, args):
                 row["MEMBER ID"] = ""
                 row["TESDA POST STATUS"] = ""
             try:
-                result = client.post_json("/VerifyMemberBene", verify_payload(row))
+                result = client.post_json("/VerifyTuloyBene", verify_payload(row))
                 status = result.get("status")
                 if status not in ("Matched", "Not Found", "Multiple Match Found"):
                     raise RuntimeError(f"Unexpected verification response: {result!r}")
@@ -333,7 +333,7 @@ def main(argv=None):
     parser.add_argument(
         "--verify-only",
         action="store_true",
-        help="Only call VerifyMemberBene and save the IDs/statuses to the CSV",
+        help="Only call VerifyTuloyBene and save the IDs/statuses to the CSV",
     )
     parser.add_argument(
         "--reverify",

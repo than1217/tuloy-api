@@ -176,7 +176,7 @@ Generates a new access token using a valid refresh token.
 
 ---
 
-### 4. `POST /VerifyMemberBene`
+### 4. `POST /VerifyTuloyBene`
 *(Requires Bearer Token authentication)*
 
 Receives user details, computes an MD5 hash, and queries `vw_verify_member_bene`.
@@ -515,7 +515,7 @@ Authorization: ******
 
 3. **Verify Member (with Bearer Token):**
    ```bash
-   curl -X POST "http://127.0.0.1:8000/VerifyMemberBene" \
+   curl -X POST "http://127.0.0.1:8000/VerifyTuloyBene" \
      -H "Authorization: Bearer <access_token>" \
      -H "Content-Type: application/json" \
      -d '{
@@ -529,7 +529,7 @@ Authorization: ******
 
 ## Bulk Data Import (CHED Matches)
 
-`others\import_ched_csv.py` verifies each CHED CSV enrollee using `/VerifyMemberBene` (using only first name, last name, and birthdate), adds the returned `TULOY ID`, `MEMBER ID`, and verification status to the CSV, then submits the enrollee through `/PostEnrolleeMatchedCHED`. The importer saves progress after each row and skips verification or submission steps already completed, so it can be resumed safely.
+`others\import_ched_csv.py` verifies each CHED CSV enrollee using `/VerifyTuloyBene` (using only first name, last name, and birthdate), adds the returned `TULOY ID`, `MEMBER ID`, and verification status to the CSV, then submits the enrollee through `/PostEnrolleeMatchedCHED`. The importer saves progress after each row and skips verification or submission steps already completed, so it can be resumed safely.
 
 1. Ensure the API is running.
 2. Set `TULOY_API_BASE_URL`, `TULOY_API_USERNAME`, and `TULOY_API_PASSWORD` in the project-root `.env` file, then run:
@@ -541,7 +541,7 @@ Use `--base-url`, `--username`, and `--password` to override the corresponding e
 
 ## TESDA CSV Import
 
-`others/import_tesda_csv.py` verifies each TESDA CSV enrollee using `/VerifyMemberBene`, adds the returned `TULOY ID`, `MEMBER ID`, and verification status to the CSV, then submits the enrollee through `/PostEnrolleeMatchedTESDA`. Like the CHED script, it streams the CSV in chunks of 10,000 rows with parallel workers, safely updating its progress so it can be resumed safely without excessive memory use.
+`others/import_tesda_csv.py` verifies each TESDA CSV enrollee using `/VerifyTuloyBene`, adds the returned `TULOY ID`, `MEMBER ID`, and verification status to the CSV, then submits the enrollee through `/PostEnrolleeMatchedTESDA`. Like the CHED script, it streams the CSV in chunks of 10,000 rows with parallel workers, safely updating its progress so it can be resumed safely without excessive memory use.
 
 Matched records require a TULOY ID and an unsigned MEMBER ID. Short-course start and end dates may be blank; when diploma or short-course data is absent, the corresponding nullable JSON column is stored as `NULL`.
 

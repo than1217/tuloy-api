@@ -42,7 +42,7 @@ def _get_cache_key(func, namespace: str = "", request: Request = None, response:
     key_parts.append(repr(sorted(clean_kwargs.items())))
     return ":".join(key_parts)
 
-@router.post("/VerifyMemberBene")
+@router.post("/VerifyTuloyBene")
 @cache(expire=86400, key_builder=_get_cache_key) # Cache for 24 hours
 def match_user(user: UserInput, current_user: dict = Depends(get_current_user), db = Depends(get_db_connection)):
     cursor = db.cursor(dictionary=True)
