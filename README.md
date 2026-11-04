@@ -274,7 +274,9 @@ Content-Type: application/json
   {
     "status": "Not Found",
     "tuloy_id": null,
-    "member_id": null
+    "member_id": null,
+    "client_status": null,
+    "roster_status": null
   }
   ```
 - **`200 OK` - Multiple Matches:**
@@ -282,7 +284,9 @@ Content-Type: application/json
   {
     "status": "Multiple Match Found",
     "tuloy_id": null,
-    "member_id": null
+    "member_id": null,
+    "client_status": null,
+    "roster_status": null
   }
   ```
 - **`200 OK` - Matched:**
@@ -290,7 +294,9 @@ Content-Type: application/json
   {
     "status": "Matched",
     "tuloy_id": "123456",
-    "member_id": 789012
+    "member_id": 789012,
+    "client_status": "Eligible",
+    "roster_status": "Active"
   }
   ```
   `tuloy_id` and `member_id` are taken from the uniquely matched database record. They are `null` when there is no match or multiple records match.

@@ -147,7 +147,8 @@ def verify_4ps_bene(user: UserInput, current_user: dict = Depends(get_current_us
     try:
         # 2. Query the source table
         select_query = r"""
-            SELECT tuloy_id, member_id FROM vw_verify_4ps_bene 
+            SELECT tuloy_id, member_id, client_status, roster_status 
+            FROM vw_verify_4ps_bene 
             WHERE match_keys = %s
         """
         query_params = [match_keys_bytes]
@@ -163,16 +164,18 @@ def verify_4ps_bene(user: UserInput, current_user: dict = Depends(get_current_us
         
         # 3. Check the conditions
         if row_count == 0:
-            return {"status": "Not Found", "tuloy_id": None, "member_id": None}
+            return {"status": "Not Found", "tuloy_id": None, "member_id": None, "client_status": None, "roster_status": None}
             
         elif row_count >= 2:
-            return {"status": "Multiple Match Found", "tuloy_id": None, "member_id": None}
+            return {"status": "Multiple Match Found", "tuloy_id": None, "member_id": None, "client_status": None, "roster_status": None}
             
         elif row_count == 1:
             return {
                 "status": "Matched",
                 "tuloy_id": results[0].get("tuloy_id"),
                 "member_id": results[0].get("member_id"),
+                "client_status": results[0].get("client_status"),
+                "roster_status": results[0].get("roster_status"),
             }
             
     except Error as e:
