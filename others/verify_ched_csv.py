@@ -174,7 +174,8 @@ def process_row_task(row, client, args):
                 row["CLIENT STATUS"] = ""
                 row["ROSTER STATUS"] = ""
             try:
-                result = client.post_json("/Verify4psBene", verify_payload(row))
+                payload = verify_payload(row)
+                result = client.post_json("/Verify4psBene", payload)
                 status = result.get("status")
                 if status not in VERIFY_STATUS_VALUES:
                     raise RuntimeError(f"Unexpected verification response: {result!r}")
