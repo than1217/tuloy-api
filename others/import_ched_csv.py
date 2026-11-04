@@ -263,6 +263,11 @@ def process_row_task(row, client, args):
             return v_succ, p_succ, fail
         if not (row.get("VERIFY STATUS") or "").strip():
             return v_succ, p_succ, fail
+            
+        if row.get("VERIFY STATUS").strip() != "Matched":
+            # Do not post Not Found or Multiple Match Found to the database
+            row["CHED POST STATUS"] = "SKIPPED"
+            return v_succ, p_succ, fail
 
         try:
             payload = ched_payload(row)
@@ -306,6 +311,49 @@ def _process_and_write_chunk(chunk, client, args, writer, target_file, pbar, sta
     target_file.flush()
     os.fsync(target_file.fileno())
 
+
+def finalize_files(temp_csv, base_csv):
+    output_import = base_csv.rsplit(".", 1)[0] + " IMPORT.csv"
+    output_not_found = base_csv.rsplit(".", 1)[0] + " NOT FOUND.csv"
+    output_multiple = base_csv.rsplit(".", 1)[0] + " MULTIPLE.csv"
+    
+    print(f"Splitting final results into:\n  - {os.path.basename(output_import)}\n  - {os.path.basename(output_not_found)}\n  - {os.path.basename(output_multiple)}")
+    
+    try:
+        with open(temp_csv, "r", encoding="utf-8-sig") as f_tmp:
+            reader_tmp = csv.DictReader(f_tmp)
+            fieldnames = reader_tmp.fieldnames
+            
+            with open(output_import, "w", encoding="utf-8-sig", newline="") as f_imp, \
+                 open(output_not_found, "w", encoding="utf-8-sig", newline="") as f_nf, \
+                 open(output_multiple, "w", encoding="utf-8-sig", newline="") as f_mult:
+                 
+                 writer_imp = csv.DictWriter(f_imp, fieldnames=fieldnames)
+                 writer_nf = csv.DictWriter(f_nf, fieldnames=fieldnames)
+                 writer_mult = csv.DictWriter(f_mult, fieldnames=fieldnames)
+                 
+                 writer_imp.writeheader()
+                 writer_nf.writeheader()
+                 writer_mult.writeheader()
+                 
+                 for r in reader_tmp:
+                     status = r.get("VERIFY STATUS", "").strip()
+                     if status == "Not Found":
+                         writer_nf.writerow(r)
+                     elif status == "Multiple Match Found":
+                         writer_mult.writerow(r)
+                     else:
+                         writer_imp.writerow(r)
+                         
+        # Remove temp_csv after successful split
+        for attempt in range(5):
+            try:
+                os.remove(temp_csv)
+                break
+            except PermissionError:
+                time.sleep(0.5)
+    except Exception as e:
+        raise RuntimeError(f"Failed to split CSV results: {e}")
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
@@ -378,8 +426,8 @@ def main(argv=None):
                 processed_count = 0
                 
         if processed_count >= total_rows:
-            print(f"All rows already processed. Finalizing file replacement to {output_csv}...")
-            os.replace(temp_csv, output_csv)
+            print("All rows already processed. Finalizing files...")
+            finalize_files(temp_csv, args.csv)
             return 0
 
         client = ApiClient(args.base_url, args.username, args.password, args.timeout)
@@ -440,21 +488,8 @@ def main(argv=None):
                     
                 pbar.close()
 
-        # 4. Atomic file replacement
-        for attempt in range(5):
-            try:
-                os.replace(temp_csv, output_csv)
-                break
-            except PermissionError as error:
-                if attempt < 4:
-                    time.sleep(0.25 * (2**attempt))
-                    continue
-                winerror = getattr(error, "winerror", None)
-                windows_error = f" Windows error {winerror}." if winerror else ""
-                raise RuntimeError(
-                    f"Processing complete, but cannot update CSV checkpoint '{output_csv}'. "
-                    f"{windows_error} Close any preview/editor preventing replacement."
-                ) from error
+        # 4. Finalize files by splitting based on status
+        finalize_files(temp_csv, args.csv)
 
         print(
             f"Finished. Verified: {stats['verify_successes']}; "
