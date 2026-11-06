@@ -218,7 +218,7 @@ def tesda_payload(row):
             "region": (row.get("REGION") or "").strip() or None,
             "province": (row.get("PROVINCE") or "").strip() or None,
             "city_municipality": (row.get("CITY_MUNICIPALITY") or row.get("CITY/MUNICIPALITY") or "").strip() or None,
-            "psgc_code": (row.get("PSGC") or "").strip() or None,
+            "psgc_code": (row.get("9 DIGITS PSGC CODE") or row.get("PSGC") or "").strip() or None,
         }
     else:
         if tuloy_id:
