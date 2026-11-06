@@ -162,11 +162,13 @@ def record_tesda_response(
             insert_data_query = """
                 INSERT INTO enroll_matched_TESDA_tbl (
                     match_id, enrollment_id, `tuloy_id`, member_id, uli_id,
-                    first_name, middle_name, last_name,
+                    first_name, middle_name, last_name, suffix, birthdate,
+                    sex, contact_no, email, region, province, city_municipality, psgc_code,
                     enrollments
                 ) VALUES (
                     %s, %s, %s, %s, %s,
-                    %s, %s, %s,
+                    %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s, %s,
                     %s
                 )
             """
@@ -183,6 +185,15 @@ def record_tesda_response(
                 learner.first_name,
                 learner.middle_name,
                 learner.last_name,
+                learner.suffix,
+                learner.birthdate,
+                learner.sex,
+                learner.contact_no,
+                learner.email,
+                learner.region,
+                learner.province,
+                learner.city_municipality,
+                learner.psgc_code,
                 short_course_json
             ))
             
