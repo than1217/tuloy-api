@@ -162,16 +162,14 @@ def record_tesda_response(
             insert_data_query = """
                 INSERT INTO enroll_matched_TESDA_tbl (
                     match_id, enrollment_id, `tuloy_id`, member_id, uli_id,
-                    mm_first_name, mm_middle_name, mm_last_name,
-                    diploma, short_course
+                    first_name, middle_name, last_name,
+                    enrollments
                 ) VALUES (
                     %s, %s, %s, %s, %s,
                     %s, %s, %s,
-                    %s, %s
+                    %s
                 )
             """
-            
-            diploma_json = None
             
             short_course_json = None
             if payload.enrollments:
@@ -185,7 +183,7 @@ def record_tesda_response(
                 learner.first_name,
                 learner.middle_name,
                 learner.last_name,
-                diploma_json, short_course_json
+                short_course_json
             ))
             
         db.commit()
