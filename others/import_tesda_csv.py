@@ -165,7 +165,9 @@ def tesda_payload(row):
     
     tuloy_id = (row.get("TULOY ID") or row.get("HHID") or "").strip()
 
-    data = None
+    learner = None
+    enrollments_data = []
+
     if matched:
         if not tuloy_id:
             raise ValueError("Verification says Matched but TULOY ID is empty")
@@ -191,37 +193,43 @@ def tesda_payload(row):
         training_status = (row.get("TRAINING STATUS") or "").strip()
         
         has_short_course = bool(qualification or start_date or end_date or training_status)
-        short_course_data = None
+        enrollments_data = []
         
         if has_short_course:
-            short_course_data = {
-                "program_name": qualification or None,
+            enrollments_data.append({
+                "qualification_code": qualification or None,
                 "start_date": parse_optional_date(start_date, "START DATE"),
                 "end_date": parse_optional_date(end_date, "END DATE"),
-                "training_status": training_status or None,
-            }
+                "status": training_status or None,
+            })
         
-        data = {
-            "id": tuloy_id,
+        learner = {
+            "tuloy_id": tuloy_id,
             "member_id": member_id,
-            "uli": uli,
-            "mothers_maiden": None,
-            "diploma": None,
-            "short_course": short_course_data,
-            "enrollment_status": None,
-            "date_encoded": None,
-            "date_updated": None,
+            "user_uli": uli,
+            "first_name": (row.get("FIRST NAME") or "").strip() or None,
+            "middle_name": (row.get("MIDDLE NAME") or "").strip() or None,
+            "last_name": (row.get("LAST NAME") or "").strip() or None,
+            "suffix": (row.get("SUFFIX") or "").strip() or None,
+            "birthdate": parse_optional_date(row.get("BIRTHDATE"), "BIRTHDATE"),
+            "sex": (row.get("SEX") or "").strip() or None,
+            "contact_no": (row.get("CONTACT NO") or "").strip() or None,
+            "email": (row.get("EMAIL") or "").strip() or None,
+            "region": (row.get("REGION") or "").strip() or None,
+            "province": (row.get("PROVINCE") or "").strip() or None,
+            "city_municipality": (row.get("CITY_MUNICIPALITY") or row.get("CITY/MUNICIPALITY") or "").strip() or None,
+            "psgc_code": (row.get("PSGC") or "").strip() or None,
         }
     else:
         if tuloy_id:
-            data = {"id": tuloy_id}
+            learner = {"tuloy_id": tuloy_id}
 
-    message = "FOUND" if matched else verified.upper()
     return {
-        "status": matched,
-        "message": message,
-        "data": data,
-        "error_code": None,
+        "status": "success",
+        "matched": matched,
+        "match_method": "name_dob",
+        "learner": learner,
+        "enrollments": enrollments_data,
         "enrollment_id": 0,
     }
 

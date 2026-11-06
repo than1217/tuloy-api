@@ -53,20 +53,36 @@ class ShortCourse(BaseModel):
     end_date: Optional[str] = None
     training_status: Optional[str] = None
 
-class TesdaData(BaseModel):
-    id: str = Field(..., pattern="^4Ps-", description="TULOY ID must start with '4Ps-'")
-    member_id: Optional[int] = None
-    uli: Optional[str] = None
-    mothers_maiden: Optional[MothersMaiden] = None
-    diploma: Optional[Degree] = None
-    short_course: Optional[ShortCourse] = None
-    enrollment_status: Optional[str] = None
+class TesdaEnrollment(BaseModel):
     date_encoded: Optional[str] = None
     date_updated: Optional[str] = None
+    end_date: Optional[str] = None
+    enrolled_at: Optional[str] = None
+    qualification_code: Optional[str] = None
+    start_date: Optional[str] = None
+    status: Optional[str] = None
+
+class TesdaLearner(BaseModel):
+    birthdate: Optional[str] = None
+    city_municipality: Optional[str] = None
+    contact_no: Optional[str] = None
+    email: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    member_id: Optional[int] = None
+    middle_name: Optional[str] = None
+    province: Optional[str] = None
+    psgc_code: Optional[str] = None
+    region: Optional[str] = None
+    sex: Optional[str] = None
+    suffix: Optional[str] = None
+    tuloy_id: Optional[str] = Field(None, pattern="^4[pP]s-", description="TULOY ID must start with '4ps-' or '4Ps-'")
+    user_uli: Optional[str] = None
 
 class TesdaResponsePayload(BaseModel):
-    status: bool
-    message: Optional[str] = None
-    data: Optional[TesdaData] = None
-    error_code: Optional[str] = None
+    status: Optional[str] = None
+    matched: Optional[bool] = None
+    match_method: Optional[str] = None
+    learner: Optional[TesdaLearner] = None
+    enrollments: Optional[list[TesdaEnrollment]] = None
     enrollment_id: Optional[int] = 0

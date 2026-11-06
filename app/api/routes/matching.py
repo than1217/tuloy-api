@@ -106,21 +106,21 @@ def record_tesda_response(
 ):
     cursor = db.cursor()
     try:
-        data = None
+        learner = None
         enrollment_id = 0
-        if payload.status and payload.message == "FOUND" and payload.data:
-            data = payload.data
-            if not data.id or len(data.id) > 50:
+        if payload.matched and payload.learner:
+            learner = payload.learner
+            if not learner.tuloy_id or len(learner.tuloy_id) > 50:
                 raise HTTPException(
                     status_code=422,
                     detail="Matched TESDA data requires a TULOY ID of at most 50 characters.",
                 )
-            if data.member_id is None or not 1 <= data.member_id <= 4294967295:
+            if learner.member_id is None or not 1 <= learner.member_id <= 4294967295:
                 raise HTTPException(
                     status_code=422,
                     detail="Matched TESDA data requires a MEMBER ID between 1 and 4294967295.",
                 )
-            if data.uli and len(data.uli) > 50:
+            if learner.user_uli and len(learner.user_uli) > 50:
                 raise HTTPException(
                     status_code=422,
                     detail="ULI exceeds the database limit of 50 characters.",
@@ -141,17 +141,16 @@ def record_tesda_response(
         """
         
         transaction_tuloy_id = ""
-        if payload.data:
-            if payload.data.id:
-                transaction_tuloy_id = str(payload.data.id).strip()
+        if payload.learner and payload.learner.tuloy_id:
+            transaction_tuloy_id = str(payload.learner.tuloy_id).strip()
                 
         if not transaction_tuloy_id:
             raise HTTPException(
                 status_code=422,
-                detail="A tuloy_id (id) is required in the payload data, even for unmatched records."
+                detail="A tuloy_id is required in the payload learner data, even for unmatched records."
             )
                 
-        db_status = payload.message or ("FOUND" if payload.status else "NOT FOUND")
+        db_status = "FOUND" if payload.matched else "NOT FOUND"
         
         cursor.execute(insert_txn_query, (
             transaction_tuloy_id,
@@ -159,7 +158,7 @@ def record_tesda_response(
         ))
         txn_id = cursor.lastrowid
         
-        if data:
+        if learner:
             insert_data_query = """
                 INSERT INTO enroll_matched_TESDA_tbl (
                     match_id, enrollment_id, `tuloy_id`, member_id, uli_id,
@@ -172,61 +171,20 @@ def record_tesda_response(
                 )
             """
             
-            date_encoded = (
-                data.date_encoded.strip() or None if data.date_encoded else None
-            )
-            date_updated = (
-                data.date_updated.strip() or None if data.date_updated else None
-            )
             diploma_json = None
-            if data.diploma is not None:
-                diploma = data.diploma
-                date_enrolled = (
-                    diploma.date_enrolled.strip() or None
-                    if diploma.date_enrolled
-                    else None
-                )
-                diploma_json = json.dumps({
-                    "program_name": diploma.program_name,
-                    "date_enrolled": date_enrolled,
-                    "program_duration": diploma.program_duration,
-                    "academic_year": diploma.academic_year,
-                    "year_level": diploma.year_level,
-                    "semester": diploma.semester,
-                    "enrollment_status": data.enrollment_status,
-                    "date_encoded": date_encoded,
-                    "date_updated": date_updated,
-                })
-
+            
             short_course_json = None
-            if data.short_course is not None:
-                course = data.short_course
-                start_date = (
-                    course.start_date.strip() or None
-                    if course.start_date
-                    else None
-                )
-                end_date = (
-                    course.end_date.strip() or None
-                    if course.end_date
-                    else None
-                )
-                short_course_json = json.dumps({
-                    "program_name": course.program_name,
-                    "start_date": start_date,
-                    "end_date": end_date,
-                    "training_status": course.training_status,
-                    "date_encoded": date_encoded,
-                    "date_updated": date_updated,
-                })
-
-            mother_maiden = data.mothers_maiden
+            if payload.enrollments:
+                enrollments_data = [e.dict() for e in payload.enrollments]
+                short_course_json = json.dumps(enrollments_data)
+            else:
+                short_course_json = "[]"
             
             cursor.execute(insert_data_query, (
-                txn_id, enrollment_id, data.id, data.member_id, data.uli,
-                mother_maiden.first_name if mother_maiden else None,
-                mother_maiden.middle_name if mother_maiden else None,
-                mother_maiden.last_name if mother_maiden else None,
+                txn_id, enrollment_id, learner.tuloy_id, learner.member_id, learner.user_uli,
+                learner.first_name,
+                learner.middle_name,
+                learner.last_name,
                 diploma_json, short_course_json
             ))
             

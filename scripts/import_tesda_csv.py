@@ -105,34 +105,55 @@ try:
                 enrollment_id = 0
                 member_id = clean_val(row.get('MEMBER ID'))
                 uli_id = clean_val(row.get('ULI'))
-                mm_first_name = clean_val(row.get('FIRST NAME'))
-                mm_middle_name = clean_val(row.get('MIDDLE NAME'))
-                mm_last_name = clean_val(row.get('LAST NAME'))
                 
-                diploma_json = "{}"
+                # Fetch new fields matching new TESDA response object
+                first_name = clean_val(row.get('FIRST NAME'))
+                middle_name = clean_val(row.get('MIDDLE NAME'))
+                last_name = clean_val(row.get('LAST NAME'))
+                suffix = clean_val(row.get('SUFFIX'))
+                birthdate = clean_val(row.get('BIRTHDATE'))
+                sex = clean_val(row.get('SEX'))
+                contact_no = clean_val(row.get('CONTACT NO'))
+                email = clean_val(row.get('EMAIL'))
+                region = clean_val(row.get('REGION'))
+                province = clean_val(row.get('PROVINCE'))
+                city_municipality = clean_val(row.get('CITY_MUNICIPALITY')) or clean_val(row.get('CITY/MUNICIPALITY'))
+                psgc_code = clean_val(row.get('PSGC'))
                 
-                short_course_dict = {
-                    "program_name": clean_val(row.get('QUALIFICATION')),
-                    "start_date": clean_val(row.get('START DATE')),
-                    "end_date": clean_val(row.get('END DATE')),
-                    "training_status": clean_val(row.get('TRAINING STATUS')),
-                }
-                short_course_json = json.dumps({k: v for k, v in short_course_dict.items() if v is not None})
+                qualification = clean_val(row.get('QUALIFICATION'))
+                start_date = clean_val(row.get('START DATE'))
+                end_date = clean_val(row.get('END DATE'))
+                training_status = clean_val(row.get('TRAINING STATUS'))
+
+                enrollments_data = []
+                if qualification or start_date or end_date or training_status:
+                    short_course_dict = {
+                        "qualification_code": qualification,
+                        "start_date": start_date,
+                        "end_date": end_date,
+                        "status": training_status,
+                    }
+                    enrollments_data.append({k: v for k, v in short_course_dict.items() if v is not None})
+                
+                enrollments_json = json.dumps(enrollments_data)
                 
                 cursor.execute("""
                     INSERT INTO enroll_matched_TESDA_tbl (
                         match_id, enrollment_id, tuloy_id, member_id, uli_id,
-                        mm_first_name, mm_middle_name, mm_last_name,
-                        diploma, short_course
+                        first_name, middle_name, last_name, suffix,
+                        birthdate, sex, contact_no, email, region, province, city_municipality, psgc_code,
+                        enrollments
                     ) VALUES (
                         %s, %s, %s, %s, %s,
-                        %s, %s, %s,
-                        %s, %s
+                        %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s
                     )
                 """, (
                     match_id, enrollment_id, tuloy_id, member_id, uli_id,
-                    mm_first_name, mm_middle_name, mm_last_name,
-                    diploma_json, short_course_json
+                    first_name, middle_name, last_name, suffix,
+                    birthdate, sex, contact_no, email, region, province, city_municipality, psgc_code,
+                    enrollments_json
                 ))
                 inserted_data += 1
                 
