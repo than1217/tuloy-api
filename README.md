@@ -449,7 +449,7 @@ Authorization: ******
 ### 8. `POST /PostEnrolleeMatchedTESDA`
 *(Requires ****** authentication)*
 
-Receives TESDA match data payload and persists it to the `matching_transaction_TESDA_tbl` and `enroll_matched_TESDA_tbl` tables. A `tuloy_id` (`id` inside `data`) is strictly required even when the record is not found (i.e. `status: false`).
+Receives TESDA match data payload and persists it to the `matching_transaction_TESDA_tbl` and `enroll_matched_TESDA_tbl` tables. A `tuloy_id` (`id` inside `learner`) is strictly required even when the record is not found (i.e. `matched: false`).
 
 **Headers:**
 ```http
@@ -460,36 +460,35 @@ Content-Type: application/json
 **Request Body:**
 ```json
 {
-  "status": true,
-  "message": "FOUND",
-  "data": {
-    "id": "4ps-1234",
+  "status": "success",
+  "matched": true,
+  "match_method": "name_dob",
+  "learner": {
+    "tuloy_id": "4Ps-1234",
     "member_id": 1234,
-    "uli": 123456,
-    "mothers_maiden": {
-      "first_name": "JUANA",
-      "middle_name": "",
-      "last_name": "MARIA"
-    },
-    "diploma": {
-      "program_name": "",
-      "date_enrolled": "",
-      "program_duration": 4,
-      "academic_year": "2026-2027",
-      "year_level": 1,
-      "semester": 1
-    },
-    "short_course": {
-      "program_name": "",
-      "start_date": "",
-      "end_date": "",
-      "training_status": ""
-    },
-    "enrollment_status": "",
-    "date_encoded": "",
-    "date_updated": ""
+    "user_uli": "YET-07-020-17051-001",
+    "first_name": "JOHN",
+    "middle_name": "DOE",
+    "last_name": "SMITH",
+    "suffix": null,
+    "birthdate": "2000-01-01",
+    "sex": "M",
+    "contact_no": "09123456789",
+    "email": "john@example.com",
+    "region": "REGION IVB - MIMAROPA",
+    "province": "OCCIDENTAL MINDORO",
+    "city_municipality": "MAMBURAO",
+    "psgc_code": "175106000"
   },
-  "error_code": null
+  "enrollments": [
+    {
+      "qualification_name": "PV SYSTEMS INSTALLATION NC II",
+      "start_date": "2026-10-26",
+      "end_date": "2026-12-17",
+      "status": "ENROLLED"
+    }
+  ],
+  "enrollment_id": 0
 }
 ```
 
@@ -501,7 +500,7 @@ Content-Type: application/json
   }
   ```
 - **`401 Unauthorized`:** Missing, invalid, or expired ******
-- **`422 Unprocessable Entity`:** Missing `tuloy_id` inside `data` (or other data validation errors).
+- **`422 Unprocessable Entity`:** Missing `tuloy_id` inside `learner` (or other data validation errors).
 - **`500 Internal Server Error`:** Database connection or query execution failure.
 
 ---
@@ -528,31 +527,33 @@ Authorization: ******
       "id": 1,
       "match_id": 1,
       "enrollment_id": 0,
-      "tuloy_id": "4ps-33082079",
-      "member_id": 33082079,
-      "uli_id": "123456",
-      "mm_first_name": "LOIDA",
-      "mm_middle_name": "",
-      "mm_last_name": "AMURAO",
-      "diploma": {
-        "program_name": "BS IT",
-        "date_enrolled": "2026-08-01",
-        "program_duration": 4,
-        "academic_year": "2026-2027",
-        "year_level": 1,
-        "semester": 1,
-        "enrollment_status": "ENROLLED"
-      },
-      "short_course": {
-        "program_name": "",
-        "start_date": "",
-        "end_date": "",
-        "training_status": ""
-      },
-      "date_encoded": null,
-      "date_updated": null,
+      "tuloy_id": "4Ps-1234",
+      "member_id": 1234,
+      "uli_id": "YET-07-020-17051-001",
+      "first_name": "JOHN",
+      "middle_name": "DOE",
+      "last_name": "SMITH",
+      "suffix": null,
+      "birthdate": "2000-01-01",
+      "sex": "M",
+      "contact_no": "09123456789",
+      "email": "john@example.com",
+      "region": "REGION IVB - MIMAROPA",
+      "province": "OCCIDENTAL MINDORO",
+      "city_municipality": "MAMBURAO",
+      "psgc_code": "175106000",
+      "enrollments": [
+        {
+          "qualification_name": "PV SYSTEMS INSTALLATION NC II",
+          "start_date": "2026-10-26",
+          "end_date": "2026-12-17",
+          "status": "ENROLLED"
+        }
+      ],
       "created_at": "2026-10-23T10:00:00",
-      "updated_at": null
+      "updated_at": null,
+      "agency_id": 2,
+      "has_enrollments": 1
     }
   ],
   "limit": 1000,
@@ -607,9 +608,9 @@ Use `--base-url`, `--username`, and `--password` to override the corresponding e
 
 ## TESDA CSV Import
 
-`others/import_tesda_csv.py` verifies each TESDA CSV enrollee using `/VerifyTuloyBene`, adds the returned `TULOY ID`, `MEMBER ID`, and verification status to the CSV, then submits the enrollee through `/PostEnrolleeMatchedTESDA`. Like the CHED script, it streams the CSV in chunks of 10,000 rows with parallel workers, safely updating its progress so it can be resumed safely without excessive memory use.
+`others/import_tesda_csv.py` and `scripts/import_tesda_csv.py` verify each TESDA CSV enrollee using `/VerifyTuloyBene`, adds the returned `TULOY ID`, `MEMBER ID`, and verification status to the CSV, then submits the enrollee through `/PostEnrolleeMatchedTESDA`. Like the CHED script, it streams the CSV safely updating its progress so it can be resumed safely without excessive memory use.
 
-Matched records require a TULOY ID and an unsigned MEMBER ID. Short-course start and end dates may be blank; when diploma or short-course data is absent, the corresponding nullable JSON column is stored as `NULL`.
+Matched records require a TULOY ID and an unsigned MEMBER ID. Short-course start and end dates may be blank; when enrollments data is absent, the corresponding nullable JSON column is stored as `[]`. `psgc_code` maps from either `9 DIGITS PSGC CODE` or `PSGC` in the CSV, and `QUALIFICATION` maps to `qualification_name`.
 
 Set `TULOY_API_USERNAME` and `TULOY_API_PASSWORD` to an existing API account, then run:
 
