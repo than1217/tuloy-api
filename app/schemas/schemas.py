@@ -59,6 +59,7 @@ class TesdaEnrollment(BaseModel):
     end_date: Optional[str] = None
     enrolled_at: Optional[str] = None
     qualification_code: Optional[str] = None
+    qualification_name: Optional[str] = None
     start_date: Optional[str] = None
     status: Optional[str] = None
 

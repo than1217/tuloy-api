@@ -118,7 +118,7 @@ try:
                 region = clean_val(row.get('REGION'))
                 province = clean_val(row.get('PROVINCE'))
                 city_municipality = clean_val(row.get('CITY_MUNICIPALITY')) or clean_val(row.get('CITY/MUNICIPALITY'))
-                psgc_code = clean_val(row.get('PSGC'))
+                psgc_code = clean_val(row.get('9 DIGITS PSGC CODE')) or clean_val(row.get('PSGC'))
                 
                 qualification = clean_val(row.get('QUALIFICATION'))
                 start_date = clean_val(row.get('START DATE'))
@@ -128,7 +128,7 @@ try:
                 enrollments_data = []
                 if qualification or start_date or end_date or training_status:
                     short_course_dict = {
-                        "qualification_code": qualification,
+                        "qualification_name": qualification,
                         "start_date": start_date,
                         "end_date": end_date,
                         "status": training_status,

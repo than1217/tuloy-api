@@ -197,7 +197,7 @@ def tesda_payload(row):
         
         if has_short_course:
             enrollments_data.append({
-                "qualification_code": qualification or None,
+                "qualification_name": qualification or None,
                 "start_date": parse_optional_date(start_date, "START DATE"),
                 "end_date": parse_optional_date(end_date, "END DATE"),
                 "status": training_status or None,
