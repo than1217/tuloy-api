@@ -91,34 +91,34 @@ def match_user(user: UserInput, current_user: dict = Depends(get_current_user), 
         row_count = len(results)
         
         # 3. Check the conditions
-        if row_count == 0:
-            if user.member_id is not None:
-                # Fallback search by member_id
-                fallback_query = "SELECT tuloy_id, member_id FROM vw_verify_member_bene WHERE member_id = %s"
-                cursor.execute(fallback_query, (user.member_id,))
-                fallback_results = cursor.fetchall()
-                fallback_count = len(fallback_results)
-                
-                if fallback_count == 1:
-                    return {
-                        "status": "Matched",
-                        "tuloy_id": fallback_results[0].get("tuloy_id"),
-                        "member_id": fallback_results[0].get("member_id"),
-                    }
-                elif fallback_count >= 2:
-                    return {"status": "Multiple Match Found", "tuloy_id": None, "member_id": None}
-            
-            return {"status": "Not Found", "tuloy_id": None, "member_id": None}
-            
-        elif row_count >= 2:
-            return {"status": "Multiple Match Found", "tuloy_id": None, "member_id": None}
-            
-        elif row_count == 1:
+        if row_count == 1:
             return {
                 "status": "Matched",
                 "tuloy_id": results[0].get("tuloy_id"),
                 "member_id": results[0].get("member_id"),
             }
+
+        # Fallback for 0 or >= 2 matches
+        if user.member_id is not None:
+            # Fallback search by member_id
+            fallback_query = "SELECT tuloy_id, member_id FROM vw_verify_member_bene WHERE member_id = %s"
+            cursor.execute(fallback_query, (user.member_id,))
+            fallback_results = cursor.fetchall()
+            fallback_count = len(fallback_results)
+            
+            if fallback_count == 1:
+                return {
+                    "status": "Matched",
+                    "tuloy_id": fallback_results[0].get("tuloy_id"),
+                    "member_id": fallback_results[0].get("member_id"),
+                }
+            elif fallback_count >= 2:
+                return {"status": "Multiple Match Found", "tuloy_id": None, "member_id": None}
+        
+        if row_count >= 2:
+            return {"status": "Multiple Match Found", "tuloy_id": None, "member_id": None}
+            
+        return {"status": "Not Found", "tuloy_id": None, "member_id": None}
             
     except Error as e:
         logger.exception("Database error during beneficiary verification")
@@ -177,31 +177,7 @@ def verify_4ps_bene(user: UserInput, current_user: dict = Depends(get_current_us
         row_count = len(results)
         
         # 3. Check the conditions
-        if row_count == 0:
-            if user.member_id is not None:
-                # Fallback search by member_id
-                fallback_query = "SELECT tuloy_id, member_id, client_status, roster_status FROM vw_verify_4ps_bene WHERE member_id = %s"
-                cursor.execute(fallback_query, (user.member_id,))
-                fallback_results = cursor.fetchall()
-                fallback_count = len(fallback_results)
-                
-                if fallback_count == 1:
-                    return {
-                        "status": "Matched",
-                        "tuloy_id": fallback_results[0].get("tuloy_id"),
-                        "member_id": fallback_results[0].get("member_id"),
-                        "client_status": fallback_results[0].get("client_status"),
-                        "roster_status": fallback_results[0].get("roster_status"),
-                    }
-                elif fallback_count >= 2:
-                    return {"status": "Multiple Match Found", "tuloy_id": None, "member_id": None, "client_status": None, "roster_status": None}
-            
-            return {"status": "Not Found", "tuloy_id": None, "member_id": None, "client_status": None, "roster_status": None}
-            
-        elif row_count >= 2:
-            return {"status": "Multiple Match Found", "tuloy_id": None, "member_id": None, "client_status": None, "roster_status": None}
-            
-        elif row_count == 1:
+        if row_count == 1:
             return {
                 "status": "Matched",
                 "tuloy_id": results[0].get("tuloy_id"),
@@ -209,6 +185,30 @@ def verify_4ps_bene(user: UserInput, current_user: dict = Depends(get_current_us
                 "client_status": results[0].get("client_status"),
                 "roster_status": results[0].get("roster_status"),
             }
+
+        # Fallback for 0 or >= 2 matches
+        if user.member_id is not None:
+            # Fallback search by member_id
+            fallback_query = "SELECT tuloy_id, member_id, client_status, roster_status FROM vw_verify_4ps_bene WHERE member_id = %s"
+            cursor.execute(fallback_query, (user.member_id,))
+            fallback_results = cursor.fetchall()
+            fallback_count = len(fallback_results)
+            
+            if fallback_count == 1:
+                return {
+                    "status": "Matched",
+                    "tuloy_id": fallback_results[0].get("tuloy_id"),
+                    "member_id": fallback_results[0].get("member_id"),
+                    "client_status": fallback_results[0].get("client_status"),
+                    "roster_status": fallback_results[0].get("roster_status"),
+                }
+            elif fallback_count >= 2:
+                return {"status": "Multiple Match Found", "tuloy_id": None, "member_id": None, "client_status": None, "roster_status": None}
+        
+        if row_count >= 2:
+            return {"status": "Multiple Match Found", "tuloy_id": None, "member_id": None, "client_status": None, "roster_status": None}
+            
+        return {"status": "Not Found", "tuloy_id": None, "member_id": None, "client_status": None, "roster_status": None}
             
     except Error as e:
         logger.exception("Database error during 4Ps beneficiary verification")
