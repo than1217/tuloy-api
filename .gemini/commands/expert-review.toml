@@ -1,0 +1,11 @@
+description = "Run comprehensive expert reviews on the current implementation"
+prompt = """
+Perform a comprehensive expert review of the recent changes.
+
+You must invoke the following experts in parallel:
+1. @code-reviewer: Check for code quality, performance logic, concurrency safety, and Python best practices.
+2. @cli-ux-expert: Check for usability, clear prompts, and non-blocking headless execution.
+3. @migration-tester: Check for data integrity validation and state resumption testing coverage.
+
+Gather their feedback and present a unified list of actionable improvements.
+"""

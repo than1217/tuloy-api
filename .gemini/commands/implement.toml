@@ -1,0 +1,18 @@
+description = "Carry out implementation with specialized subagents and verification"
+prompt = """
+Execute a full implementation based on the plan and task description. Work autonomously until complete.
+
+Prime Directive:
+COMPLETE IMPLEMENTATION ONLY - No stubs, no placeholders, no "TODO" comments. Every function must be fully working. Every feature must be verified.
+
+Phases:
+1. Analyze & Organize: Break into parallel and sequential tasks.
+2. Implement with Subagents: Delegate to @migration-developer and @cli-ux-expert as appropriate.
+3. Self-Verify: Run unit tests and functional headless migration validation.
+4. Simplify: Use @code-simplifier to clean up without changing behavior.
+5. Expert Review: Run @code-reviewer, @cli-ux-expert, @migration-tester.
+6. Final Verification: Confirm code adheres to rules and runs efficiently.
+
+Task:
+{{args}}
+"""

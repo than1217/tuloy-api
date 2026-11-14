@@ -1,0 +1,12 @@
+description = "Deep analysis mode - understand before implementing"
+prompt = """
+Deep analysis mode - understand before acting. Use when you need to "take a step back" and analyze without implementing.
+
+Rules:
+- NO file edits - Read and analyze only
+- NO implementations - Recommendations only
+- Reference evidence - Always cite file:line for claims
+
+Task / Context:
+{{args}}
+"""

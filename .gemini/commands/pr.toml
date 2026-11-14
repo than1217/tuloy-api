@@ -1,0 +1,22 @@
+description = "Create a GitHub Pull Request for the current branch"
+prompt = """
+Create a Pull Request for the current branch.
+
+First, gather context:
+```bash
+!{git status -sb}
+!{git branch --show-current}
+!{git log --oneline -10}
+```
+
+Then:
+1. Push branch if needed: git push -u origin <current_branch>
+2. Create PR using `gh pr create` with:
+   - Title: Brief description (imperative mood)
+   - Body: Summary of changes and test plan
+3. No AI attribution anywhere in title or body
+4. Return PR URL when complete
+
+Instructions:
+{{args}}
+"""

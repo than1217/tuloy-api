@@ -1,0 +1,9 @@
+description = "Verify that tests cover the changes and run successfully"
+prompt = """
+Verify the testing status of the recent changes.
+
+1. Invoke @migration-tester to evaluate test coverage and state resumption resilience.
+2. Execute the test suite via pytest.
+3. If tests fail, report the failures and suggest fixes.
+4. If coverage is inadequate, report what is missing.
+"""

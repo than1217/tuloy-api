@@ -1,0 +1,28 @@
+description = "Conventional commit (feat/fix/chore/docs/refactor/test)"
+prompt = """
+Create a commit for staged/unstaged changes.
+
+First, gather context:
+```bash
+!{git status --short}
+!{git branch --show-current}
+!{git log --oneline -5}
+!{git diff --stat HEAD}
+```
+
+Then:
+1. Review changes and identify what was modified
+2. Stage relevant files (exclude .env, credentials, __pycache__, *.pyc)
+3. Write a conventional commit message following this format:
+   - feat(scope): description - New feature
+   - fix(scope): description - Bug fix
+   - chore(scope): description - Maintenance
+   - docs(scope): description - Documentation
+   - refactor(scope): description - Code refactoring
+   - test(scope): description - Tests
+4. No AI attribution: no Co-Authored-By trailer, no "Generated with Gemini CLI" line
+5. Run git status after commit to verify success
+
+User instructions:
+{{args}}
+"""
