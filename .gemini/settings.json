@@ -5,6 +5,9 @@
   "context": {
     "fileName": ["GEMINI.md"]
   },
+  "memory": {
+    "enabled": true
+  },
   "tools": {
     "allowed": [
       "run_shell_command"
