@@ -142,6 +142,7 @@ def verify_payload(row):
     first_name = (row.get("First name") or row.get("MEMBER First name") or "").strip()
     last_name = (row.get("Last name") or row.get("MEMBER Last name") or "").strip()
     birthdate = (row.get("Birthdate") or row.get("Birthday") or "").strip()
+    
     if not first_name or not last_name or not birthdate:
         raise ValueError("First name, Last name, and Birthdate are required")
 
@@ -154,11 +155,26 @@ def verify_payload(row):
     else:
         raise ValueError(f"Invalid Birthdate: {birthdate!r}")
 
-    return {
+    payload = {
         "first_name": first_name,
         "last_name": last_name,
         "date_of_birth": birthdate,
     }
+
+    # Add optional parameters if available in the CSV
+    member_id = (row.get("MEMBER ID") or row.get("ENTRY_ID") or row.get("entry_id") or "").strip()
+    if member_id:
+        payload["member_id"] = member_id
+        
+    lrn = (row.get("LRN") or "").strip()
+    if lrn:
+        payload["lrn"] = lrn
+
+    household_id = (row.get("Household ID") or row.get("listahanan_id") or "").strip()
+    if household_id:
+        payload["household_id"] = household_id
+
+    return payload
 
 
 def ched_payload(row):

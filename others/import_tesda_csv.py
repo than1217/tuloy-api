@@ -155,6 +155,20 @@ def verify_payload(row):
     }
     if not payload["first_name"] or not payload["last_name"]:
         raise ValueError("FIRST NAME and LAST NAME are required")
+
+    # Add optional parameters if available in the CSV
+    member_id = (row.get("MEMBER ID") or row.get("ENTRY_ID") or row.get("entry_id") or "").strip()
+    if member_id:
+        payload["member_id"] = member_id
+        
+    lrn = (row.get("LRN") or "").strip()
+    if lrn:
+        payload["lrn"] = lrn
+
+    household_id = (row.get("HHID") or row.get("Household ID") or row.get("listahanan_id") or "").strip()
+    if household_id:
+        payload["household_id"] = household_id
+
     return payload
 
 def tesda_payload(row):
