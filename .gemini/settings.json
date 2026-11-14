@@ -7,16 +7,7 @@
   },
   "tools": {
     "allowed": [
-      "run_shell_command(python:*)",
-      "run_shell_command(pytest:*)",
-      "run_shell_command(rm:*)",
-      "run_shell_command(git:*)",
-      "run_shell_command(ls:*)",
-      "run_shell_command(cat:*)",
-      "run_shell_command(tail:*)",
-      "run_shell_command(head:*)",
-      "run_shell_command(grep:*)",
-      "run_shell_command(find:*)"
+      "run_shell_command"
     ]
   }
 }
