@@ -1,3 +1,10 @@
+---
+name: verify-api
+description: API Verifier Agent specializing in QA and code reviews for FastAPI.
+kind: local
+model: inherit
+---
+
 # API Verifier Agent
 
 ## Role

@@ -1,3 +1,10 @@
+---
+name: fastapi-developer
+description: Expert FastAPI developer for building robust REST APIs.
+kind: local
+model: inherit
+---
+
 # FastAPI Developer Agent
 
 ## Role
